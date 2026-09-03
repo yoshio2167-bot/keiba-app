@@ -3,7 +3,7 @@ import pandas as pd
 import time
 import random
 
-st.title("🏇 マイ競馬予想アプリ (脚質・上がり3F完全対応版)")
+st.title("🏇 マイ競馬予想アプリ (安全設計・完全版)")
 
 # サイドバーでレース条件を詳細に設定
 st.sidebar.header("📍 レース条件設定")
@@ -39,6 +39,12 @@ else:
         '直近5走平均着順': [2.1, 3.5, 4.2, 1.8, 6.5]
     })
 
+# 万が一CSVに列が足りない場合に自動補完する安全機能
+if '上がり3F' not in df.columns:
+    df['上がり3F'] = 35.0
+if '脚質' not in df.columns:
+    df['脚質'] = '先行'
+
 # データの編集画面
 st.subheader("2. 出馬馬データの確認・調整")
 edited_df = st.data_editor(df, num_rows="dynamic")
@@ -49,19 +55,13 @@ if 'result_df' not in st.session_state:
 if st.button("AI予想＆買い目を実行"):
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
-    
-    # 上がり3Fのタイムが早いほど高得点にするスコア（例：33秒台なら高得点、40秒なら低め）
-    # 30秒台前半を基準に、タイムの小ささを評価
     edited_df['上がり3Fスコア'] = (40.0 - edited_df['上がり3F'].clip(32, 40)) * 10
     
-    # コース特性（新潟・東京などの直線が長いコースは差し・追い込み・上がり3Fを優遇）
     long_straight_courses = ["東京", "新潟", "阪神"]
     is_long_straight = course in long_straight_courses
-    
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
     if surface == "ダート" or is_power_cond:
-        # ダート・重馬場はスタミナ＆先行力を重視
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.15 +
             edited_df['騎手勝率'] * 100 * 0.15 +
@@ -71,9 +71,8 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['上がり3Fスコア'] * 0.10 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info("※【パワー・スタミナ重視配分】ダート・重馬場仕様で計算しています。")
+        st.info("※【パワー・スタミナ重視配分】で計算しています。")
     elif is_long_straight and surface == "芝":
-        # 直線が長い芝コースは「上がり3F（切れ味）」を強く評価
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.25 +
             edited_df['騎手勝率'] * 100 * 0.15 +
@@ -83,9 +82,8 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['上がり3Fスコア'] * 0.20 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info(f"※【直線勝負・切れ味重視配分】{course}コースの長直線仕様で計算しています。")
+        st.info(f"※【直線勝負・切れ味重視配分】({course}コース)で計算しています。")
     else:
-        # 標準・小回りコースはスピードと総合力
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.30 +
             edited_df['騎手勝率'] * 100 * 0.20 +
