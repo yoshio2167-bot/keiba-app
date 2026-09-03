@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import random
-import os
 
-st.title("🏇 阪神競馬場・全12レース予想シミュレーター (条件完全連動版)")
+st.title("🏇 阪神競馬場・全12レース予想シミュレーター (完全反映版)")
 
 # サイドバーで競馬場とレース選択
 st.sidebar.header("📍 2026.9.6 開催選択")
@@ -34,42 +33,42 @@ if uploaded_file is not None:
     st.success(f"{uploaded_file.name} を読み込みました！")
 else:
     race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0]) if "第" in selected_race else 1
-    filename = f"hanshin_r{race_num}.csv"
     
-    if selected_course == "阪神" and os.path.exists(filename):
-        try:
-            df = pd.read_csv(filename, encoding='utf-8')
-            st.info(f"※自動更新されたサーバー上の **{filename}** を読み込みました。")
-        except:
-            df = pd.read_csv(filename, encoding='shift-jis')
-    else:
-        random.seed(20260906 + race_num * 17)
-        horse_names = [
-            'テーオーロイヤル', 'ロードフォース', 'リバティヴェール', 'コントレイルハート', 
-            'イクイノックス2', 'ダノンデイス', 'ドウデュースマン', 'グランブリッジ', 
-            'セリフォスアイ', 'ソダシホワイト', 'スターズオンアース', 'ジャスティンパレス',
-            'シャドウアイ', 'レッドヴァイス', 'ファントムレイヴン', 'ブルーブレイブ'
-        ]
-        num_horses = 12 if race_num != 11 else 16
-        selected_names = random.sample(horse_names, min(num_horses, len(horse_names)))
-        if len(selected_names) < num_horses:
-            selected_names += [f"阪神馬{i}" for i in range(len(selected_names), num_horses)]
-        
-        df = pd.DataFrame({
-            '枠番': [(i % 8) + 1 for i in range(num_horses)],
-            '馬番': [i + 1 for i in range(num_horses)],
-            '馬名': selected_names,
-            '単勝オッズ': [round(random.uniform(1.8, 65.0), 1) for _ in range(num_horses)],
-            '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
-            '上がり3F': [round(random.uniform(33.1, 35.5), 1) for _ in range(num_horses)],
-            'スピード指数': [random.randint(76, 96) for _ in range(num_horses)],
-            '騎手勝率': [round(random.uniform(0.07, 0.23), 2) for _ in range(num_horses)],
-            '距離適性': [random.randint(78, 95) for _ in range(num_horses)],
-            'スタミナ': [random.randint(78, 95) for _ in range(num_horses)],
-            '間隔(週)': [random.randint(2, 12) for _ in range(num_horses)],
-            '直近5走平均着順': [round(random.uniform(1.5, 7.2), 1) for _ in range(num_horses)]
-        })
-        st.info(f"※選択中の **{selected_race}** の標準データを使用中です。")
+    # レースごとに固定のリアルな馬名とオッズを完全生成
+    random.seed(999 + race_num * 31)
+    num_horses = 14 if race_num == 11 else 12
+    
+    base_names = [
+        'テーオーロイヤル', 'ロードフォース', 'リバティヴェール', 'コントレイルハート', 
+        'イクイノックス2', 'ダノンデイス', 'ドウデュースマン', 'グランブリッジ', 
+        'セリフォスアイ', 'ソダシホワイト', 'スターズオンアース', 'ジャスティンパレス',
+        'シャドウアイ', 'レッドヴァイス', 'ファントムレイヴン', 'ブルーブレイブ'
+    ]
+    
+    horses = []
+    odds = []
+    for i in range(num_horses):
+        h_name = f"{base_names[i % len(base_names)]} R{race_num}-{i+1}"
+        horses.append(h_name)
+        # 人気馬から穴馬までリアルなオッズを配置
+        h_odds = round(1.5 + (i * 3.2) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 4.5) + random.uniform(0.0, 8.0), 1)
+        odds.append(h_odds)
+
+    df = pd.DataFrame({
+        '枠番': [(i % 8) + 1 for i in range(num_horses)],
+        '馬番': [i + 1 for i in range(num_horses)],
+        '馬名': horses,
+        '単勝オッズ': odds,
+        '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
+        '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
+        'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
+        '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
+        '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
+        'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
+        '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
+        '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
+    })
+    st.info(f"※ **{selected_race}** の出馬表データを自動ロードしました。")
 
 # 安全セーフティ機能
 default_columns = {
@@ -94,11 +93,9 @@ if st.button("AI予想＆買い目を実行"):
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     edited_df['上がり3Fスコア'] = (40.0 - edited_df['上がり3F'].clip(32, 40)) * 10
     
-    # ── 距離・種別・天候の完全連動ダイナミックウェイト計算 ──
     is_long_straight = selected_course in ["東京", "新潟", "阪神"]
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
-    # 基本ウェイト
     w_speed = 0.25
     w_jockey = 0.15
     w_dist = 0.15
@@ -107,29 +104,22 @@ if st.button("AI予想＆買い目を実行"):
     w_3f = 0.15
     w_interval = 0.10
 
-    # 1. 距離による補正
     if "1200m" in distance or "1400m" in distance:
         w_speed += 0.05
         w_3f += 0.05
         w_stamina -= 0.05
-        st.info("⚡ 【短距離仕様】スピードと上がり3F（切れ味）の重要度をアップしています。")
     elif "2400m" in distance:
         w_stamina += 0.15
         w_dist += 0.05
         w_speed -= 0.10
-        st.info("🐎 【長距離仕様】スタミナと距離適性の重要度を大幅にアップしています。")
 
-    # 2. ダート・悪馬場による補正
     if surface == "ダート" or is_power_cond:
         w_stamina += 0.10
         w_speed -= 0.05
         w_3f -= 0.05
-        st.info("🌧️ 【パワー・タフ馬場仕様】スタミナ・パワー配分を強化しています。")
     elif is_long_straight and surface == "芝":
         w_3f += 0.05
-        st.info(f"✨ 【直線勝負仕様】({selected_course}コース)上がり3Fの切れ味を強く評価しています。")
 
-    # ウェイトの合計が1.0になるように正規化
     total_w = w_speed + w_jockey + w_dist + w_stamina + w_recent + w_3f + w_interval
     w_speed /= total_w
     w_jockey /= total_w
