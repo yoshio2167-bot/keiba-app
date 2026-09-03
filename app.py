@@ -39,6 +39,10 @@ else:
 st.subheader("2. 出馬馬データの確認・調整")
 edited_df = st.data_editor(df, num_rows="dynamic")
 
+# 予想結果を記憶する箱を用意
+if 'result_df' not in st.session_state:
+    st.session_state.result_df = None
+
 if st.button("AI予想＆買い目を実行"):
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
@@ -72,16 +76,22 @@ if st.button("AI予想＆買い目を実行"):
         else: 印リスト.append("-")
     
     result_df['印'] = 印リスト
+    # 結果をメモリに保存
+    st.session_state.result_df = result_df
+
+# 予想結果がメモリにある場合は、いつでも表示する
+if st.session_state.result_df is not None:
+    res_df = st.session_state.result_df
     
     st.subheader("📊 予想・印の結果")
-    st.dataframe(result_df[['印', '枠番', '馬番', '馬名', '単勝オッズ', 'スコア']])
+    st.dataframe(res_df[['印', '枠番', '馬番', '馬名', '単勝オッズ', 'スコア']])
     
     # 焼き鳥防止の買い目
     st.subheader("🎫 焼き鳥防止！おすすめ買い目シミュレーション")
-    if len(result_df) >= 3:
-        本命行 = result_df.loc[result_df['印'] == "◎ 本命"].iloc[0]
-        対抗行 = result_df.loc[result_df['印'] == "○ 対抗"].iloc[0]
-        単穴行 = result_df.loc[result_df['印'] == "▲ 単穴"].iloc[0]
+    if len(res_df) >= 3:
+        本命行 = res_df.loc[res_df['印'] == "◎ 本命"].iloc[0]
+        対抗行 = res_df.loc[res_df['印'] == "○ 対抗"].iloc[0]
+        単穴行 = res_df.loc[res_df['印'] == "▲ 単穴"].iloc[0]
         
         st.markdown(f"""
         * **複勝:** **{本命行['馬番']}番 {本命行['馬名']}**
@@ -93,7 +103,7 @@ if st.button("AI予想＆買い目を実行"):
     if st.button("🚀 レーススタート！"):
         st.write("各馬、一斉にスタートしました！ゲートイン完了、発走！")
         
-        race_df = result_df[['枠番', '馬番', '馬名', 'スコア']].copy()
+        race_df = res_df[['枠番', '馬番', '馬名', 'スコア']].copy()
         race_progress = st.empty()
         
         for phase in ["【スタート〜向こう正面】", "【第3コーナーを通過】", "【最後の直線に入った！】", "【ゴール前、激しい叩き合い！】"]:
