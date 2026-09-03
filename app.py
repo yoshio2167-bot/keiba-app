@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🏇 マイ競馬予想アプリ (データ連動版)")
+st.title("🏇 マイ競馬予想アプリ (買い目自動生成版)")
 
 # サイドバーでレース条件を設定
 st.sidebar.header("📍 レース条件設定")
@@ -11,17 +11,15 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在の条件:** {course}・{distance} / 馬場: **{track_condition}**")
 
-# ファイルアップロード機能の追加
+# ファイルアップロード機能
 st.subheader("1. 出馬表データの読み込み")
 uploaded_file = st.file_uploader("出馬表のCSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
-    # ユーザーがアップロードしたCSVファイルを読み込む
     df = pd.read_csv(uploaded_file)
     st.success("CSVファイルを読み込みました！")
 else:
-    # ファイルがない場合はデフォルトのサンプルデータを使用
-    st.info("※現在はサンプルデータが表示されています。独自のCSVをアップロードすると入れ替わります。")
+    st.info("※サンプルデータを使用中です。CSVをアップロードすると入れ替わります。")
     df = pd.DataFrame({
         '馬名': ['サイレンスディープ', 'レッドオーシャン', 'ブルーブレイブ', 'ゴールドアクター', 'ホワイトスピード'],
         'スピード指数': [88, 85, 82, 86, 79],
@@ -36,7 +34,7 @@ else:
 st.subheader("2. 出走馬データの確認・調整")
 edited_df = st.data_editor(df, num_rows="dynamic")
 
-if st.button("AI予想（印を付与）を実行"):
+if st.button("AI予想＆買い目を実行"):
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     
@@ -74,4 +72,26 @@ if st.button("AI予想（印を付与）を実行"):
     st.subheader("📊 予想・印の結果")
     st.dataframe(result_df[['印', '馬名', 'スコア', '直近5走平均着順', '間隔(週)']])
     
-    st.success("予想が完了しました！")
+    # 焼き鳥防止（的中率重視）の買い目自動生成
+    st.subheader("🎫 焼き鳥防止！おすすめ買い目シミュレーション")
+    
+    if len(result_df) >= 3:
+        本命馬 = result_df.loc[result_df['印'] == "◎ 本命", '馬名'].values
+        対抗馬 = result_df.loc[result_df['印'] == "○ 対抗", '馬名'].values
+        単穴馬 = result_df.loc[result_df['印'] == "▲ 単穴", '馬名'].values
+        
+        本命名 = 本命馬[0] if len(本命馬) > 0 else result_df.loc[0, '馬名']
+        対抗名 = 対抗馬[0] if len(対抗馬) > 0 else result_df.loc[1, '馬名']
+        単穴名 = 単穴馬[0] if len(単穴馬) > 0 else result_df.loc[2, '馬名']
+        
+        st.markdown(f"""
+        * **【絶対焼き鳥回避】単勝・複勝（手堅く1点勝負）**
+          * 複勝: **{本命名}** （まずはここを軸にすれば大崩れしにくい！）
+        * **【本命軸・流し】ワイド（的中重視のバランス型）**
+          * 流し： **{本命名} － {対抗名}、{単穴名}** （計2点）
+        * **【手堅く狙う】馬連流し**
+          * 流し： **{本命名} － {対抗名}、{単穴名}** （計2点）
+        """)
+        st.success("的中率と回収率のバランスを考えた買い目を出力しました！")
+    else:
+        st.warning("馬のデータが3頭以上必要です。")
