@@ -1,0 +1,37 @@
+name: Weekly Race Data Auto-Update
+
+on:
+  schedule:
+    # 毎週金曜日の午後6時（日本時間）に自動実行
+    - cron: '0 9 * * 5'
+  workflow_dispatch: # 手動でもいつでも実行可能
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas
+
+      - name: Run data update script
+        run: |
+          python update_races.py
+
+      - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "Auto-Update Bot"
+          git config --global user.email "bot@example.com"
+          git add .
+          git commit -m "Weekly automated race data update" || exit 0
+          git push
