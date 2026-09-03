@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import time
 import random
 
-st.title("🏇 マイ競馬予想アプリ (完全CSV対応・進化版)")
+st.title("🏇 マイ競馬予想アプリ (シミュレーション統計版)")
 
 # サイドバーでレース条件を設定
 st.sidebar.header("📍 レース条件設定")
@@ -15,7 +14,7 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在の条件:** {course}・{surface}・{distance} / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 1. 柔軟なCSVファイルアップロード機能
+# ファイルアップロード機能
 st.subheader("1. 出馬表データの読み込み")
 uploaded_file = st.file_uploader("任意のCSVファイルをアップロードしてください", type=["csv"])
 
@@ -23,34 +22,36 @@ if uploaded_file is not None:
     try:
         df = pd.read_csv(uploaded_file, encoding='utf-8')
     except UnicodeDecodeError:
-        df = pd.read_csv(uploaded_file, encoding='shift-jis') # 日本のExcel対策
+        df = pd.read_csv(uploaded_file, encoding='shift-jis')
     st.success("CSVファイルを正常に読み込みました！")
 else:
-    st.info("※初期サンプルデータを使用中です。独自のCSVファイルをアップロードすると自動で切り替わります。")
+    st.info("※初期サンプルデータを使用中です。CSVをアップロードすると自動で切り替わります。")
     df = pd.DataFrame({
-        '枠番': [1, 2, 3, 4, 5],
-        '馬番': [1, 3, 5, 7, 9],
-        '馬名': ['サイレンスディープ', 'レッドオーシャン', 'ブルーブレイブ', 'ゴールドアクター', 'ホワイトスピード'],
-        '単勝オッズ': [2.4, 4.1, 7.8, 12.5, 25.0],
-        '脚質': ['逃げ', '先行', '差し', '先行', '追込'],
-        '上がり3F': [33.5, 34.2, 33.8, 35.0, 33.2],
-        'スピード指数': [88, 85, 82, 86, 79],
-        '騎手勝率': [0.18, 0.15, 0.12, 0.20, 0.08],
-        '距離適性': [90, 80, 85, 75, 70],
-        'スタミナ': [80, 85, 90, 85, 75],
-        '間隔(週)': [4, 8, 2, 24, 3],
-        '直近5走平均着順': [2.1, 3.5, 4.2, 1.8, 6.5]
+        '枠番': [1, 2, 2, 3, 3, 4, 4, 5, 6, 7, 8, 8],
+        '馬番': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        '馬名': [
+            'ボーンディスウェイ', 'サヴォーナ', 'ロデオドライブ', 'ドゥレッツァ', 
+            'ゾロアストロ', 'チェルヴィニア', 'ジュンブロッサム', 'ダノンシーマ', 
+            'アーバンシック', 'バレエマスター', 'ステレンボッシュ', 'マスカレードディ'
+        ],
+        '単勝オッズ': [85.1, 26.5, 3.7, 9.2, 3.5, 15.5, 60.5, 3.2, 18.4, 36.9, 13.3, 10.0],
+        '脚質': ['先行', '差し', '先行', '先行', '差し', '追込', '追込', '先行', '差し', '追込', '先行', '差し'],
+        '上がり3F': [34.5, 34.0, 33.6, 33.5, 33.4, 33.2, 33.1, 33.3, 33.7, 34.2, 33.8, 33.9],
+        'スピード指数': [82, 85, 89, 91, 90, 86, 81, 92, 87, 80, 88, 85],
+        '騎手勝率': [0.10, 0.12, 0.18, 0.16, 0.19, 0.15, 0.09, 0.21, 0.14, 0.08, 0.17, 0.12],
+        '距離適性': [85, 88, 90, 92, 90, 87, 82, 93, 89, 78, 91, 85],
+        'スタミナ': [86, 90, 88, 92, 90, 85, 84, 91, 92, 80, 88, 85],
+        '間隔(週)': [4, 6, 3, 8, 5, 10, 4, 6, 7, 5, 9, 4],
+        '直近5走平均着順': [5.2, 4.0, 2.2, 3.1, 2.0, 4.5, 6.8, 1.8, 4.2, 7.1, 3.8, 3.0]
     })
 
-# ── CSVの項目を自動で補完する「自動適応セーフティ機能」 ──
-# どんなCSVをアップロードしてもエラーで落ちないように、足りない列を自動生成します
+# 安全セーフティ機能
 default_columns = {
     '枠番': 1, '馬番': 1, '馬名': '不明馬', '単勝オッズ': 10.0,
     '脚質': '先行', '上がり3F': 35.0, 'スピード指数': 80,
     '騎手勝率': 0.10, '距離適性': 80, 'スタミナ': 80,
     '間隔(週)': 4, '直近5走平均着順': 5.0
 }
-
 for col, default_val in default_columns.items():
     if col not in df.columns:
         df[col] = default_val
@@ -71,7 +72,6 @@ if st.button("AI予想＆買い目を実行"):
     is_long_straight = course in long_straight_courses
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
-    # 条件に応じたスコア計算
     if surface == "ダート" or is_power_cond:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.15 +
@@ -82,7 +82,6 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['上がり3Fスコア'] * 0.10 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info("※【パワー・スタミナ重視配分】で計算しています。")
     elif is_long_straight and surface == "芝":
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.25 +
@@ -93,7 +92,6 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['上がり3Fスコア'] * 0.20 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info(f"※【直線勝負・切れ味重視配分】({course}コース)で計算しています。")
     else:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.30 +
@@ -104,7 +102,6 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['上がり3Fスコア'] * 0.05 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info("※【スタンダード総合力配分】で計算しています。")
     
     result_df = edited_df.sort_values(by='スコア', ascending=False).reset_index(drop=True)
     
@@ -136,27 +133,40 @@ if st.session_state.result_df is not None:
         * **ワイド流し:** **{本命行['馬番']}番 － {対抗行['馬番']}番, {単穴行['馬番']}番**
         """)
     
-    st.subheader("🎮 3D風レース実況シミュレーター")
-    if st.button("🚀 レーススタート！"):
-        st.write(f"天候：{weather}、{course}競馬場の{surface}コース、各馬ゲートイン完了、発走！")
-        
-        race_df = res_df[['枠番', '馬番', '馬名', '脚質', 'スコア']].copy()
-        race_progress = st.empty()
-        
-        for phase in ["【スタート〜向こう正面】", "【第3コーナーを通過】", "【最後の直線に入った！】", "【ゴール前、激しい叩き合い！】"]:
-            time.sleep(1.2)
-            race_df['current_pos'] = race_df['スコア'] + [random.uniform(-10, 10) for _ in range(len(race_df))]
-            race_df = race_df.sort_values(by='current_pos', ascending=False).reset_index(drop=True)
+    # ── 10回レースシミュレーション統計機能 ──
+    st.subheader("📈 10回シミュレーション統計 (勝率・複勝率分析)")
+    if st.button("📊 10回レースを自動シミュレートして統計を出す"):
+        with st.spinner("シミュレーション実行中..."):
+            wins = {name: 0 for name in res_df['馬名']}
+            podiums = {name: 0 for name in res_df['馬名']}
             
-            with race_progress.container():
-                st.markdown(f"### {phase}")
-                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} ({race_df.loc[0, '脚質']}) / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} ({race_df.loc[1, '脚質']}) / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']} ({race_df.loc[2, '脚質']})")
-        
-        time.sleep(1.0)
-        st.success(f"🏆 ィーーーゴール！！ 優勝したのは **{race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']}** だぁーーー！！")
-        
-        st.write("【正式結果】")
-        final_result = []
-        for i, row in race_df.iterrows():
-            final_result.append(f"第{i+1}着: {row['馬番']}番 {row['馬名']} ({row['脚質']})")
-        st.text("\n".join(final_result))
+            for _ in range(10):
+                sim_df = res_df[['馬番', '馬名', 'スコア']].copy()
+                sim_df['current_pos'] = sim_df['スコア'] + [random.uniform(-10, 10) for _ in range(len(sim_df))]
+                sim_df = sim_df.sort_values(by='current_pos', ascending=False).reset_index(drop=True)
+                
+                winner = sim_df.loc[0, '馬名']
+                wins[winner] += 1
+                
+                for i in range(min(3, len(sim_df))):
+                    p_name = sim_df.loc[i, '馬名']
+                    podiums[p_name] += 1
+            
+            stats_data = []
+            for _, row in res_df.iterrows():
+                m_name = row['馬名']
+                w_count = wins[m_name]
+                p_count = podiums[m_name]
+                stats_data.append({
+                    '枠番': row['枠番'],
+                    '馬番': row['馬番'],
+                    '馬名': m_name,
+                    '1着回数': w_count,
+                    '勝率(%)': f"{w_count / 10 * 100:.1f}%",
+                    '3着内回数': p_count,
+                    '複勝率(%)': f"{p_count / 10 * 100:.1f}%"
+                })
+            
+            stats_df = pd.DataFrame(stats_data).sort_values(by='1着回数', ascending=False).reset_index(drop=True)
+            st.success("統計データの集計が完了しました！")
+            st.dataframe(stats_df)
