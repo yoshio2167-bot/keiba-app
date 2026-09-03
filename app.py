@@ -3,9 +3,9 @@ import pandas as pd
 import time
 import random
 
-st.title("🏇 マイ競馬予想アプリ (安全設計・完全版)")
+st.title("🏇 マイ競馬予想アプリ (完全CSV対応・進化版)")
 
-# サイドバーでレース条件を詳細に設定
+# サイドバーでレース条件を設定
 st.sidebar.header("📍 レース条件設定")
 course = st.sidebar.selectbox("競馬場", ["東京", "中山", "京都", "阪神", "小倉", "新潟", "中京", "札幌", "函館"])
 surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
@@ -15,15 +15,18 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在の条件:** {course}・{surface}・{distance} / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# ファイルアップロード機能
+# 1. 柔軟なCSVファイルアップロード機能
 st.subheader("1. 出馬表データの読み込み")
-uploaded_file = st.file_uploader("出馬表のCSVファイルをアップロードしてください", type=["csv"])
+uploaded_file = st.file_uploader("任意のCSVファイルをアップロードしてください", type=["csv"])
 
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.success("CSVファイルを読み込みました！")
+    try:
+        df = pd.read_csv(uploaded_file, encoding='utf-8')
+    except UnicodeDecodeError:
+        df = pd.read_csv(uploaded_file, encoding='shift-jis') # 日本のExcel対策
+    st.success("CSVファイルを正常に読み込みました！")
 else:
-    st.info("※サンプルデータを使用中です。CSVをアップロードすると入れ替わります。")
+    st.info("※初期サンプルデータを使用中です。独自のCSVファイルをアップロードすると自動で切り替わります。")
     df = pd.DataFrame({
         '枠番': [1, 2, 3, 4, 5],
         '馬番': [1, 3, 5, 7, 9],
@@ -39,13 +42,20 @@ else:
         '直近5走平均着順': [2.1, 3.5, 4.2, 1.8, 6.5]
     })
 
-# 万が一CSVに列が足りない場合に自動補完する安全機能
-if '上がり3F' not in df.columns:
-    df['上がり3F'] = 35.0
-if '脚質' not in df.columns:
-    df['脚質'] = '先行'
+# ── CSVの項目を自動で補完する「自動適応セーフティ機能」 ──
+# どんなCSVをアップロードしてもエラーで落ちないように、足りない列を自動生成します
+default_columns = {
+    '枠番': 1, '馬番': 1, '馬名': '不明馬', '単勝オッズ': 10.0,
+    '脚質': '先行', '上がり3F': 35.0, 'スピード指数': 80,
+    '騎手勝率': 0.10, '距離適性': 80, 'スタミナ': 80,
+    '間隔(週)': 4, '直近5走平均着順': 5.0
+}
 
-# データの編集画面
+for col, default_val in default_columns.items():
+    if col not in df.columns:
+        df[col] = default_val
+
+# 2. データの編集画面
 st.subheader("2. 出馬馬データの確認・調整")
 edited_df = st.data_editor(df, num_rows="dynamic")
 
@@ -61,6 +71,7 @@ if st.button("AI予想＆買い目を実行"):
     is_long_straight = course in long_straight_courses
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
+    # 条件に応じたスコア計算
     if surface == "ダート" or is_power_cond:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.15 +
