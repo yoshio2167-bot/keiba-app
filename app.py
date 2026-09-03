@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import os
 
-st.title("🏇 阪神競馬場・全12レース予想シミュレーター (自動読込対応版)")
+st.title("🏇 阪神競馬場・全12レース予想シミュレーター (条件完全連動版)")
 
 # サイドバーで競馬場とレース選択
 st.sidebar.header("📍 2026.9.6 開催選択")
@@ -36,7 +36,6 @@ else:
     race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0]) if "第" in selected_race else 1
     filename = f"hanshin_r{race_num}.csv"
     
-    # 自動更新されたCSVファイルが存在すればそれを読み込み、なければ自動生成する
     if selected_course == "阪神" and os.path.exists(filename):
         try:
             df = pd.read_csv(filename, encoding='utf-8')
@@ -95,40 +94,60 @@ if st.button("AI予想＆買い目を実行"):
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     edited_df['上がり3Fスコア'] = (40.0 - edited_df['上がり3F'].clip(32, 40)) * 10
     
-    long_straight_courses = ["東京", "新潟", "阪神"]
-    is_long_straight = selected_course in long_straight_courses
+    # ── 距離・種別・天候の完全連動ダイナミックウェイト計算 ──
+    is_long_straight = selected_course in ["東京", "新潟", "阪神"]
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
+    # 基本ウェイト
+    w_speed = 0.25
+    w_jockey = 0.15
+    w_dist = 0.15
+    w_stamina = 0.10
+    w_recent = 0.10
+    w_3f = 0.15
+    w_interval = 0.10
+
+    # 1. 距離による補正
+    if "1200m" in distance or "1400m" in distance:
+        w_speed += 0.05
+        w_3f += 0.05
+        w_stamina -= 0.05
+        st.info("⚡ 【短距離仕様】スピードと上がり3F（切れ味）の重要度をアップしています。")
+    elif "2400m" in distance:
+        w_stamina += 0.15
+        w_dist += 0.05
+        w_speed -= 0.10
+        st.info("🐎 【長距離仕様】スタミナと距離適性の重要度を大幅にアップしています。")
+
+    # 2. ダート・悪馬場による補正
     if surface == "ダート" or is_power_cond:
-        edited_df['スコア'] = (
-            edited_df['スピード指数'] * 0.15 +
-            edited_df['騎手勝率'] * 100 * 0.15 +
-            edited_df['距離適性'] * 0.15 +
-            edited_df['スタミナ'] * 0.30 +
-            edited_df['直近成績スコア'] * 0.10 +
-            edited_df['上がり3Fスコア'] * 0.10 +
-            (edited_df['間隔(週)'] * 0.5) * 0.05
-        )
+        w_stamina += 0.10
+        w_speed -= 0.05
+        w_3f -= 0.05
+        st.info("🌧️ 【パワー・タフ馬場仕様】スタミナ・パワー配分を強化しています。")
     elif is_long_straight and surface == "芝":
-        edited_df['スコア'] = (
-            edited_df['スピード指数'] * 0.25 +
-            edited_df['騎手勝率'] * 100 * 0.15 +
-            edited_df['距離適性'] * 0.15 +
-            edited_df['スタミナ'] * 0.10 +
-            edited_df['直近成績スコア'] * 0.10 +
-            edited_df['上がり3Fスコア'] * 0.20 +
-            (edited_df['間隔(週)'] * 0.5) * 0.05
-        )
-    else:
-        edited_df['スコア'] = (
-            edited_df['スピード指数'] * 0.30 +
-            edited_df['騎手勝率'] * 100 * 0.20 +
-            edited_df['距離適性'] * 0.20 +
-            edited_df['スタミナ'] * 0.10 +
-            edited_df['直近成績スコア'] * 0.10 +
-            edited_df['上がり3Fスコア'] * 0.05 +
-            (edited_df['間隔(週)'] * 0.5) * 0.05
-        )
+        w_3f += 0.05
+        st.info(f"✨ 【直線勝負仕様】({selected_course}コース)上がり3Fの切れ味を強く評価しています。")
+
+    # ウェイトの合計が1.0になるように正規化
+    total_w = w_speed + w_jockey + w_dist + w_stamina + w_recent + w_3f + w_interval
+    w_speed /= total_w
+    w_jockey /= total_w
+    w_dist /= total_w
+    w_stamina /= total_w
+    w_recent /= total_w
+    w_3f /= total_w
+    w_interval /= total_w
+
+    edited_df['スコア'] = (
+        edited_df['スピード指数'] * w_speed +
+        edited_df['騎手勝率'] * 100 * w_jockey +
+        edited_df['距離適性'] * w_dist +
+        edited_df['スタミナ'] * w_stamina +
+        edited_df['直近成績スコア'] * w_recent +
+        edited_df['上がり3Fスコア'] * w_3f +
+        (edited_df['間隔(週)'] * 0.5) * w_interval
+    )
     
     result_df = edited_df.sort_values(by='スコア', ascending=False).reset_index(drop=True)
     
