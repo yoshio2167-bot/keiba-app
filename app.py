@@ -1,29 +1,29 @@
 import streamlit as st
 import pandas as pd
 import random
+import os
 
-st.title("🏇 マイ競馬予想アプリ (阪神全12レース完全対応版)")
+st.title("🏇 阪神競馬場・全12レース予想シミュレーター (自動読込対応版)")
 
 # サイドバーで競馬場とレース選択
-st.sidebar.header("📍 開催レース選択")
-selected_course = st.sidebar.selectbox("競馬場", ["阪神", "東京", "中山", "京都", "小倉", "新潟", "中京", "札幌", "函館"])
+st.sidebar.header("📍 2026.9.6 開催選択")
+selected_course = st.sidebar.selectbox("競馬場", ["阪神", "東京", "中山", "京都", "小倉", "新潟", "中京"])
 
-# 阪神競馬場の場合は全12レースのプルダウンを表示
 if selected_course == "阪神":
     race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
-    selected_race = st.sidebar.selectbox("レース選択", race_options)
+    selected_race = st.sidebar.selectbox("阪神全12R 選択", race_options)
 else:
-    selected_race = st.sidebar.selectbox("レース選択", ["第1レース", "第2レース", "第3レース", "メインレース"])
+    selected_race = st.sidebar.selectbox("レース選択", ["第1レース", "第11レース メイン"])
 
 surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
 distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"])
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
 
-st.markdown(f"**現在の設定:** {selected_course}・{selected_race} ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
+st.markdown(f"**現在表示中:** 2026/9/6(日) {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 1. 任意のCSVファイルアップロード ＋ プルダウン自動連動
-st.subheader("1. 出馬表データの読み込み（または個別ファイル追加）")
+# 1. 任意のCSVファイルアップロード
+st.subheader("1. 出馬表データ（自動ロード または CSV追加）")
 uploaded_file = st.file_uploader("特定のCSVファイルをアップロードする場合はこちら", type=["csv"])
 
 if uploaded_file is not None:
@@ -33,30 +33,44 @@ if uploaded_file is not None:
         df = pd.read_csv(uploaded_file, encoding='shift-jis')
     st.success(f"{uploaded_file.name} を読み込みました！")
 else:
-    # プルダウンで選ばれたレースに応じたサンプルデータを自動生成（ご自身のCSVに差し替え可能）
-    st.info(f"※現在選択中: **{selected_course} {selected_race}** の標準サンプルデータを使用中です。")
-    
-    # レースごとに少し数値が変わるようにシードを設定
     race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0]) if "第" in selected_race else 1
-    random.seed(race_num * 100)
+    filename = f"hanshin_r{race_num}.csv"
     
-    sample_horses = ['ディープインパクト', 'ロードカナロア', 'アーモンドアイ', 'コントレイル', 'イクイノックス', 'リバティアイランド', 'ドウデュース', 'デアリングタクト']
-    num_horses = 8 if race_num % 2 == 0 else 10
-    
-    df = pd.DataFrame({
-        '枠番': [i % 8 + 1 for i in range(num_horses)],
-        '馬番': [i + 1 for i in range(num_horses)],
-        '馬名': [f"{sample_horses[i % len(sample_horses)]} {i+1}号" for i in range(num_horses)],
-        '単勝オッズ': [round(random.uniform(1.5, 40.0), 1) for _ in range(num_horses)],
-        '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
-        '上がり3F': [round(random.uniform(33.0, 35.5), 1) for _ in range(num_horses)],
-        'スピード指数': [random.randint(75, 95) for _ in range(num_horses)],
-        '騎手勝率': [round(random.uniform(0.06, 0.22), 2) for _ in range(num_horses)],
-        '距離適性': [random.randint(75, 95) for _ in range(num_horses)],
-        'スタミナ': [random.randint(75, 95) for _ in range(num_horses)],
-        '間隔(週)': [random.randint(2, 12) for _ in range(num_horses)],
-        '直近5走平均着順': [round(random.uniform(1.2, 7.0), 1) for _ in range(num_horses)]
-    })
+    # 自動更新されたCSVファイルが存在すればそれを読み込み、なければ自動生成する
+    if selected_course == "阪神" and os.path.exists(filename):
+        try:
+            df = pd.read_csv(filename, encoding='utf-8')
+            st.info(f"※自動更新されたサーバー上の **{filename}** を読み込みました。")
+        except:
+            df = pd.read_csv(filename, encoding='shift-jis')
+    else:
+        random.seed(20260906 + race_num * 17)
+        horse_names = [
+            'テーオーロイヤル', 'ロードフォース', 'リバティヴェール', 'コントレイルハート', 
+            'イクイノックス2', 'ダノンデイス', 'ドウデュースマン', 'グランブリッジ', 
+            'セリフォスアイ', 'ソダシホワイト', 'スターズオンアース', 'ジャスティンパレス',
+            'シャドウアイ', 'レッドヴァイス', 'ファントムレイヴン', 'ブルーブレイブ'
+        ]
+        num_horses = 12 if race_num != 11 else 16
+        selected_names = random.sample(horse_names, min(num_horses, len(horse_names)))
+        if len(selected_names) < num_horses:
+            selected_names += [f"阪神馬{i}" for i in range(len(selected_names), num_horses)]
+        
+        df = pd.DataFrame({
+            '枠番': [(i % 8) + 1 for i in range(num_horses)],
+            '馬番': [i + 1 for i in range(num_horses)],
+            '馬名': selected_names,
+            '単勝オッズ': [round(random.uniform(1.8, 65.0), 1) for _ in range(num_horses)],
+            '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
+            '上がり3F': [round(random.uniform(33.1, 35.5), 1) for _ in range(num_horses)],
+            'スピード指数': [random.randint(76, 96) for _ in range(num_horses)],
+            '騎手勝率': [round(random.uniform(0.07, 0.23), 2) for _ in range(num_horses)],
+            '距離適性': [random.randint(78, 95) for _ in range(num_horses)],
+            'スタミナ': [random.randint(78, 95) for _ in range(num_horses)],
+            '間隔(週)': [random.randint(2, 12) for _ in range(num_horses)],
+            '直近5走平均着順': [round(random.uniform(1.5, 7.2), 1) for _ in range(num_horses)]
+        })
+        st.info(f"※選択中の **{selected_race}** の標準データを使用中です。")
 
 # 安全セーフティ機能
 default_columns = {
