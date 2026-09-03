@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+import time
+import random
 
-st.title("🏇 マイ競馬予想アプリ (枠番・オッズ対応版)")
+st.title("🏇 マイ競馬予想アプリ (レース実況ゲーム版)")
 
 # サイドバーでレース条件を設定
 st.sidebar.header("📍 レース条件設定")
@@ -50,7 +52,6 @@ if st.button("AI予想＆買い目を実行"):
             edited_df['直近成績スコア'] * 0.1 +
             (edited_df['間隔(週)'] * 0.5) * 0.1
         )
-        st.info("※重・不良馬場＋ローテーションを考慮して計算しています。")
     else:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.35 +
@@ -73,25 +74,49 @@ if st.button("AI予想＆買い目を実行"):
     result_df['印'] = 印リスト
     
     st.subheader("📊 予想・印の結果")
-    # 表示項目に枠番・馬番・オッズを追加
     st.dataframe(result_df[['印', '枠番', '馬番', '馬名', '単勝オッズ', 'スコア']])
     
-    # 焼き鳥防止（的中率重視）の買い目自動生成
+    # 焼き鳥防止の買い目
     st.subheader("🎫 焼き鳥防止！おすすめ買い目シミュレーション")
-    
     if len(result_df) >= 3:
         本命行 = result_df.loc[result_df['印'] == "◎ 本命"].iloc[0]
         対抗行 = result_df.loc[result_df['印'] == "○ 対抗"].iloc[0]
         単穴行 = result_df.loc[result_df['印'] == "▲ 単穴"].iloc[0]
         
         st.markdown(f"""
-        * **【絶対焼き鳥回避】複勝（手堅く的中狙い）**
-          * 複勝: **{本命行['馬番']}番 {本命行['馬名']}** （オッズ {本命行['単勝オッズ']}倍の軸）
-        * **【本命軸・流し】ワイド（的中重視のバランス型）**
-          * 流し： **{本命行['馬番']}番 － {対抗行['馬番']}番, {単穴行['馬番']}番** （計2点）
-        * **【手堅く狙う】馬連流し**
-          * 流し： **{本命行['馬番']}番 － {対抗行['馬番']}番, {単穴行['馬番']}番** （計2点）
+        * **複勝:** **{本命行['馬番']}番 {本命行['馬名']}**
+        * **ワイド流し:** **{本命行['馬番']}番 － {対抗行['馬番']}番, {단穴行='馬番'}番**（※単穴行）
         """)
-        st.success("枠番・馬番・オッズを反映した買い目を出力しました！")
-    else:
-        st.warning("馬のデータが3頭以上必要です。")
+    
+    # ── レース実況ゲーム機能 ──
+    st.subheader("🎮 3D風レース実況シミュレーター")
+    if st.button("🚀 レーススタート！"):
+        st.write("各馬、一斉にスタートしました！ゲートイン完了、発走！")
+        
+        # 各馬のレース中の進行度を管理する一時データ
+        race_df = result_df[['枠番', '馬番', '馬名', 'スコア']].copy()
+        
+        # 実況用のプレースホルダー
+        race_progress = st.empty()
+        
+        # レースの進行（3コーナー、4コーナー、直線）
+        for phase in ["【スタート〜向こう正面】", "【第3コーナーを通過】", "【最後の直線に入った！】", "【ゴール前、激しい叩き合い！】"]:
+            time.sleep(1.2) # 演出のタメ
+            # スコアをベースに、ランダムな運（展開）を加える
+            race_df['current_pos'] = race_df['スコア'] + [random.uniform(-10, 10) for _ in range(len(race_df))]
+            race_df = race_df.sort_values(by='current_pos', ascending=False).reset_index(drop=True)
+            
+            with race_progress.container():
+                st.markdown(f"### {phase}")
+                # 上位3頭を実況風に表示
+                st.info(番 := f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']}")
+        
+        time.sleep(1.0)
+        st.success(f"🏆 ィーーーゴール！！ 優勝したのは **{race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']}** だぁーーー！！")
+        
+        # 最終着順の発表
+        st.write("【正式結果】")
+        final_result = []
+        for i, row in race_df.iterrows():
+            final_result.append(f"第{i+1}着: {row['馬番']}番 {row['馬名']}")
+        st.text("\n".join(final_result))
