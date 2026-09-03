@@ -85,7 +85,7 @@ if st.button("AI予想＆買い目を実行"):
         
         st.markdown(f"""
         * **複勝:** **{本命行['馬番']}番 {本命行['馬名']}**
-        * **ワイド流し:** **{本命行['馬番']}番 － {対抗行['馬番']}番, {단穴行='馬番'}番**（※単穴行）
+        * **ワイド流し:** **{本命行['馬番']}番 － {対抗行['馬番']}番, {単穴行['馬番']}番**
         """)
     
     # ── レース実況ゲーム機能 ──
@@ -93,28 +93,21 @@ if st.button("AI予想＆買い目を実行"):
     if st.button("🚀 レーススタート！"):
         st.write("各馬、一斉にスタートしました！ゲートイン完了、発走！")
         
-        # 各馬のレース中の進行度を管理する一時データ
         race_df = result_df[['枠番', '馬番', '馬名', 'スコア']].copy()
-        
-        # 実況用のプレースホルダー
         race_progress = st.empty()
         
-        # レースの進行（3コーナー、4コーナー、直線）
         for phase in ["【スタート〜向こう正面】", "【第3コーナーを通過】", "【最後の直線に入った！】", "【ゴール前、激しい叩き合い！】"]:
-            time.sleep(1.2) # 演出のタメ
-            # スコアをベースに、ランダムな運（展開）を加える
+            time.sleep(1.2)
             race_df['current_pos'] = race_df['スコア'] + [random.uniform(-10, 10) for _ in range(len(race_df))]
             race_df = race_df.sort_values(by='current_pos', ascending=False).reset_index(drop=True)
             
             with race_progress.container():
                 st.markdown(f"### {phase}")
-                # 上位3頭を実況風に表示
-                st.info(番 := f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']}")
+                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']}")
         
         time.sleep(1.0)
         st.success(f"🏆 ィーーーゴール！！ 優勝したのは **{race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']}** だぁーーー！！")
         
-        # 最終着順の発表
         st.write("【正式結果】")
         final_result = []
         for i, row in race_df.iterrows():
