@@ -118,7 +118,7 @@ if st.session_state.result_df is not None:
             
             with race_progress.container():
                 st.markdown(f"### {phase}")
-                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.->loc[2, '馬名'] if '->' in 'race_df.loc[2, \'馬名\']' else race_df.loc[2, '馬名']}")
+                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']}")
         
         time.sleep(1.0)
         st.success(f"🏆 ィーーーゴール！！ 優勝したのは **{race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']}** だぁーーー！！")
