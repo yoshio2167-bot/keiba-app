@@ -3,18 +3,20 @@ import pandas as pd
 import random
 import os
 
-st.title("🏇 中央競馬・3場全12R 予想シミュレーター")
+st.title("🏇 中央競馬・土日開催 全3場全12R 予想シミュレーター")
 
-# サイドバーで競馬場とレース選択
+# サイドバーで曜日、競馬場、レース選択
 st.sidebar.header("📍 開催選択")
-selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
+selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"])
+day_prefix = "sat" if selected_day == "土曜日" else "sun"
 
+selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
 course_prefix_map = {
     "阪神": "hanshin",
     "中山": "nakayama",
     "東京": "tokyo"
 }
-prefix = course_prefix_map[selected_course]
+course_prefix = course_prefix_map[selected_course]
 
 race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
 selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options)
@@ -24,7 +26,7 @@ distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m 
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
 
-st.markdown(f"**現在表示中:** {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
+st.markdown(f"**現在表示中:** 2026/9/5-6 **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
 # 1. 任意のCSVファイルアップロード
 st.subheader("1. 出馬表データ（自動ロード または CSV追加）")
@@ -38,7 +40,7 @@ if uploaded_file is not None:
     st.success(f"{uploaded_file.name} を読み込みました！")
 else:
     race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
-    filename = f"{prefix}_r{race_num}.csv"
+    filename = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
     
     if os.path.exists(filename):
         try:
@@ -47,11 +49,11 @@ else:
         except:
             df = pd.read_csv(filename, encoding='shift-jis')
     else:
-        random.seed(hash(prefix) + race_num * 31)
+        random.seed(hash(day_prefix) + hash(course_prefix) + race_num * 31)
         num_horses = 14 if race_num == 11 else 12
         base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ']
         
-        horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
+        horses = [f"{selected_day[0]}-{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
         odds = [round(1.5 + (i * 3.0) + random.uniform(0.0, 1.2), 1) if i < 3 else round(10.0 + (i * 4.0), 1) for i in range(num_horses)]
 
         df = pd.DataFrame({
@@ -68,7 +70,7 @@ else:
             '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
             '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
         })
-        st.info(f"※ **{selected_course} {selected_race}** の標準データを使用中です。")
+        st.info(f"※ **{selected_day}・{selected_course} {selected_race}** の標準データを使用中です。")
 
 # 安全セーフティ機能
 default_columns = {
