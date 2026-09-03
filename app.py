@@ -27,12 +27,11 @@ st.subheader("1. 出走馬データの編集")
 edited_df = st.data_editor(st.session_state.data, num_rows="dynamic")
 
 if st.button("AI予想（印を付与）を実行"):
-    # 直近5走の平均着順を「評価値」に変換（着順が良いほどスコアが高くなるように調整）
-    # 例: 平均着順1位なら高得点、平均10位なら低得点
+    # 直近5走の平均着順を「評価値」に変換
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     
-    # 馬場状態や出走間隔（叩き良化型か、休み明けかなど）を考慮したスコア計算
+    # 馬場状態や出走間隔を考慮したスコア計算
     if track_condition in ["重", "不良"]:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.25 +
