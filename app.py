@@ -3,7 +3,7 @@ import pandas as pd
 import random
 import os
 
-st.title("🏇 中央競馬・土日開催 全3場全12R 予想シミュレーター")
+st.title("🏇 中央競馬・土日開催 全3場全12R 予想＆実績検証シミュレーター")
 
 # サイドバーで曜日、競馬場、レース選択
 st.sidebar.header("📍 開催選択")
@@ -26,7 +26,7 @@ distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m 
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
 
-st.markdown(f"**現在表示中:** 2026/9/5-6 **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
+st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
 # 1. 任意のCSVファイルアップロード
 st.subheader("1. 出馬表データ（自動ロード または CSV追加）")
@@ -207,3 +207,30 @@ if st.session_state.result_df is not None:
             stats_df = pd.DataFrame(stats_data).sort_values(by='1着回数', ascending=False).reset_index(drop=True)
             st.success("統計データの集計が完了しました！")
             st.dataframe(stats_df)
+
+    # 3. 実際の結果入力＆検証モード
+    st.subheader("🎯 実際の結果（着順）入力 ＆ 的中・回収率検証")
+    st.markdown("レース終了後、実際の1着〜3着の馬番を入力または選択して、AI予想が的中したか検証できます！")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        actual_1st_no = st.selectbox("実際の1着 馬番", res_df['馬番'].tolist(), index=0)
+    with col2:
+        actual_2nd_no = st.selectbox("実際の2着 馬番", res_df['馬番'].tolist(), index=min(1, len(res_df)-1))
+    with col3:
+        actual_3rd_no = st.selectbox("実際の3着 馬番", res_df['馬番'].tolist(), index=min(2, len(res_df)-1))
+        
+    if st.button("🏆 検証結果を集計する"):
+        honmei_row = res_df.loc[res_df['印'] == "◎ 本命"].iloc[0]
+        honmei_no = honmei_row['馬番']
+        
+        is_honmei_place = (honmei_no in [actual_1st_no, actual_2nd_no, actual_3rd_no])
+        
+        st.markdown("### 📊 検証レポート")
+        st.write(f"- **AI本命 (◎):** {honmei_row['馬名']} (馬番: {honmei_no})")
+        st.write(f"- **実際の入着:** 1着[{actual_1st_no}番] / 2着[{actual_2nd_no}番] / 3着[{actual_3rd_no}番]")
+        
+        if is_honmei_place:
+            st.success("🎉 **本命馬が馬券圏内（3着以内）好走的中！**")
+        else:
+            st.warning("💦 本命馬は馬券圏外となりました。")
