@@ -3,7 +3,7 @@ import pandas as pd
 import time
 import random
 
-st.title("🏇 マイ競馬予想アプリ (コース・天候完全対応版)")
+st.title("🏇 マイ競馬予想アプリ (脚質・上がり3F完全対応版)")
 
 # サイドバーでレース条件を詳細に設定
 st.sidebar.header("📍 レース条件設定")
@@ -29,6 +29,8 @@ else:
         '馬番': [1, 3, 5, 7, 9],
         '馬名': ['サイレンスディープ', 'レッドオーシャン', 'ブルーブレイブ', 'ゴールドアクター', 'ホワイトスピード'],
         '単勝オッズ': [2.4, 4.1, 7.8, 12.5, 25.0],
+        '脚質': ['逃げ', '先行', '差し', '先行', '追込'],
+        '上がり3F': [33.5, 34.2, 33.8, 35.0, 33.2],
         'スピード指数': [88, 85, 82, 86, 79],
         '騎手勝率': [0.18, 0.15, 0.12, 0.20, 0.08],
         '距離適性': [90, 80, 85, 75, 70],
@@ -48,31 +50,52 @@ if st.button("AI予想＆買い目を実行"):
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     
-    # 芝かダート、天候（雨・雪）、馬場状態による重み付けの自動切り替え
+    # 上がり3Fのタイムが早いほど高得点にするスコア（例：33秒台なら高得点、40秒なら低め）
+    # 30秒台前半を基準に、タイムの小ささを評価
+    edited_df['上がり3Fスコア'] = (40.0 - edited_df['上がり3F'].clip(32, 40)) * 10
+    
+    # コース特性（新潟・東京などの直線が長いコースは差し・追い込み・上がり3Fを優遇）
+    long_straight_courses = ["東京", "新潟", "阪神"]
+    is_long_straight = course in long_straight_courses
+    
     is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
     
     if surface == "ダート" or is_power_cond:
-        # ダートまたは悪天候・重馬場は「スタミナ・パワー」重視
+        # ダート・重馬場はスタミナ＆先行力を重視
         edited_df['スコア'] = (
-            edited_df['スピード指数'] * 0.20 +
+            edited_df['スピード指数'] * 0.15 +
             edited_df['騎手勝率'] * 100 * 0.15 +
             edited_df['距離適性'] * 0.15 +
-            edited_df['スタミナ'] * 0.35 +
+            edited_df['スタミナ'] * 0.30 +
             edited_df['直近成績スコア'] * 0.10 +
+            edited_df['上がり3Fスコア'] * 0.10 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info("※【パワー・スタミナ重視配分】ダートまたは悪天候・重馬場の条件で計算しています。")
-    else:
-        # 芝の良馬場・稍重は「スピード・切れ味」重視
+        st.info("※【パワー・スタミナ重視配分】ダート・重馬場仕様で計算しています。")
+    elif is_long_straight and surface == "芝":
+        # 直線が長い芝コースは「上がり3F（切れ味）」を強く評価
         edited_df['スコア'] = (
-            edited_df['スピード指数'] * 0.35 +
+            edited_df['スピード指数'] * 0.25 +
+            edited_df['騎手勝率'] * 100 * 0.15 +
+            edited_df['距離適性'] * 0.15 +
+            edited_df['スタミナ'] * 0.10 +
+            edited_df['直近成績スコア'] * 0.10 +
+            edited_df['上がり3Fスコア'] * 0.20 +
+            (edited_df['間隔(週)'] * 0.5) * 0.05
+        )
+        st.info(f"※【直線勝負・切れ味重視配分】{course}コースの長直線仕様で計算しています。")
+    else:
+        # 標準・小回りコースはスピードと総合力
+        edited_df['スコア'] = (
+            edited_df['スピード指数'] * 0.30 +
             edited_df['騎手勝率'] * 100 * 0.20 +
             edited_df['距離適性'] * 0.20 +
             edited_df['スタミナ'] * 0.10 +
             edited_df['直近成績スコア'] * 0.10 +
+            edited_df['上がり3Fスコア'] * 0.05 +
             (edited_df['間隔(週)'] * 0.5) * 0.05
         )
-        st.info("※【スピード勝負重視配分】芝・良馬場の条件で計算しています。")
+        st.info("※【スタンダード総合力配分】で計算しています。")
     
     result_df = edited_df.sort_values(by='スコア', ascending=False).reset_index(drop=True)
     
@@ -91,7 +114,7 @@ if st.session_state.result_df is not None:
     res_df = st.session_state.result_df
     
     st.subheader("📊 予想・印の結果")
-    st.dataframe(res_df[['印', '枠番', '馬番', '馬名', '単勝オッズ', 'スコア']])
+    st.dataframe(res_df[['印', '枠番', '馬番', '馬名', '脚質', '上がり3F', '単勝オッズ', 'スコア']])
     
     st.subheader("🎫 焼き鳥防止！おすすめ買い目シミュレーション")
     if len(res_df) >= 3:
@@ -108,7 +131,7 @@ if st.session_state.result_df is not None:
     if st.button("🚀 レーススタート！"):
         st.write(f"天候：{weather}、{course}競馬場の{surface}コース、各馬ゲートイン完了、発走！")
         
-        race_df = res_df[['枠番', '馬番', '馬名', 'スコア']].copy()
+        race_df = res_df[['枠番', '馬番', '馬名', '脚質', 'スコア']].copy()
         race_progress = st.empty()
         
         for phase in ["【スタート〜向こう正面】", "【第3コーナーを通過】", "【最後の直線に入った！】", "【ゴール前、激しい叩き合い！】"]:
@@ -118,7 +141,7 @@ if st.session_state.result_df is not None:
             
             with race_progress.container():
                 st.markdown(f"### {phase}")
-                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']}")
+                st.info(f"1位: {race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']} ({race_df.loc[0, '脚質']}) / 2位: {race_df.loc[1, '馬番']}番 {race_df.loc[1, '馬名']} ({race_df.loc[1, '脚質']}) / 3位: {race_df.loc[2, '馬番']}番 {race_df.loc[2, '馬名']} ({race_df.loc[2, '脚質']})")
         
         time.sleep(1.0)
         st.success(f"🏆 ィーーーゴール！！ 優勝したのは **{race_df.loc[0, '馬番']}番 {race_df.loc[0, '馬名']}** だぁーーー！！")
@@ -126,5 +149,5 @@ if st.session_state.result_df is not None:
         st.write("【正式結果】")
         final_result = []
         for i, row in race_df.iterrows():
-            final_result.append(f"第{i+1}着: {row['馬番']}番 {row['馬名']}")
+            final_result.append(f"第{i+1}着: {row['馬番']}番 {row['馬名']} ({row['脚質']})")
         st.text("\n".join(final_result))
