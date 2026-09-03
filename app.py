@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("🏇 マイ競馬予想アプリ (拡張版)")
+st.title("🏇 マイ競馬予想アプリ (データ連動版)")
 
 # サイドバーでレース条件を設定
 st.sidebar.header("📍 レース条件設定")
@@ -11,27 +11,35 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在の条件:** {course}・{distance} / 馬場: **{track_condition}**")
 
-# 初期データの項目に出走間隔と直近5走の平均着順などを追加
-if 'data' not in st.session_state:
-    st.session_state.data = pd.DataFrame({
+# ファイルアップロード機能の追加
+st.subheader("1. 出馬表データの読み込み")
+uploaded_file = st.file_uploader("出馬表のCSVファイルをアップロードしてください", type=["csv"])
+
+if uploaded_file is not None:
+    # ユーザーがアップロードしたCSVファイルを読み込む
+    df = pd.read_csv(uploaded_file)
+    st.success("CSVファイルを読み込みました！")
+else:
+    # ファイルがない場合はデフォルトのサンプルデータを使用
+    st.info("※現在はサンプルデータが表示されています。独自のCSVをアップロードすると入れ替わります。")
+    df = pd.DataFrame({
         '馬名': ['サイレンスディープ', 'レッドオーシャン', 'ブルーブレイブ', 'ゴールドアクター', 'ホワイトスピード'],
         'スピード指数': [88, 85, 82, 86, 79],
         '騎手勝率': [0.18, 0.15, 0.12, 0.20, 0.08],
         '距離適性': [90, 80, 85, 75, 70],
         'スタミナ': [80, 85, 90, 85, 75],
-        '間隔(週)': [4, 8, 2, 24, 3],          # 出走間隔（中何週か）
-        '直近5走平均着順': [2.1, 3.5, 4.2, 1.8, 6.5] # 直近5走の平均着順（数字が小さいほど優秀）
+        '間隔(週)': [4, 8, 2, 24, 3],
+        '直近5走平均着順': [2.1, 3.5, 4.2, 1.8, 6.5]
     })
 
-st.subheader("1. 出走馬データの編集")
-edited_df = st.data_editor(st.session_state.data, num_rows="dynamic")
+# データの編集画面
+st.subheader("2. 出走馬データの確認・調整")
+edited_df = st.data_editor(df, num_rows="dynamic")
 
 if st.button("AI予想（印を付与）を実行"):
-    # 直近5走の平均着順を「評価値」に変換
     max_rank = 10.0
     edited_df['直近成績スコア'] = (max_rank - edited_df['直近5走平均着順'].clip(1, 10)) * 10
     
-    # 馬場状態や出走間隔を考慮したスコア計算
     if track_condition in ["重", "不良"]:
         edited_df['スコア'] = (
             edited_df['スピード指数'] * 0.25 +
