@@ -101,5 +101,17 @@ if df is not None:
 
         sim_df = pd.DataFrame(sim_list).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
         st.dataframe(sim_df, use_container_width=True)
+
+        # Save simulation result to session state & provide download button
+        st.session_state['sim_result'] = sim_df
+
+    if 'sim_result' in st.session_state:
+        csv_data = st.session_state['sim_result'].to_csv(index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 シミュレーション結果をCSVとして保存（ダウンロード）",
+            data=csv_data,
+            file_name=f"simulation_result_{race_location}.csv",
+            mime="text/csv"
+        )
 else:
     st.info("左側のメニューからデータを読み込んでください。")
