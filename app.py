@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import zipfile
 import io
 import random
 from datetime import date
@@ -21,6 +20,7 @@ race_configs = []
 
 distances = ["1000m", "1200m", "1400m", "1600m", "1800m", "2000m", "2200m", "2400m", "2500m", "3000m", "3200m"]
 locations = ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"]
+classes = ["新馬", "未勝利", "1勝クラス", "2勝クラス", "3勝クラス", "オープン", "L (リステッド)", "G3", "G2", "G1"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
@@ -29,22 +29,24 @@ for i, tab in enumerate(race_tabs):
         with c1:
             r_date = st.date_input(f"開催日 #{i+1}", date(2026, 9, 5), key=f"date_{i}")
             r_loc = st.selectbox(f"開催地 #{i+1}", locations, index=0 if i==0 else (1 if i==1 else 2), key=f"loc_{i}")
+            r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}")
         with c2:
             r_num = st.selectbox(f"レース番号 #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
             r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}")
+            r_dir = st.selectbox(f"回り #{i+1}", ["右", "左", "直線"], index=0, key=f"dir_{i}")
         with c3:
             r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
             r_cond = st.selectbox(f"馬場 #{i+1}", ["良", "稍重", "重", "不良"], index=0, key=f"cond_{i}")
 
-        r_title = f"{r_loc}{r_num}"
-        r_cond_str = f"{r_surface}{r_dist} ({r_direction if 'r_direction' in locals() else '右'}・{r_cond})"
+        r_title = f"{r_loc}{r_num} ({r_class})"
+        r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond})"
 
         st.markdown("##### 📥 出馬表データの読込")
         input_mode = st.radio(f"読込方法 #{i+1}", ["直接テキストペースト", "CSVファイルアップロード"], key=f"mode_{i}")
 
         df = None
         if input_mode == "直接テキストペースト":
-            pasted = st.text_area(f"CSVテキストペースト #{i+1}", height=150, value="", key=f"text_{i}")
+            pasted = st.text_area(f"CSVテキストペースト #{i+1} (間隔(週)・前走不利カラム含む)", height=150, value="", key=f"text_{i}")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -59,7 +61,7 @@ for i, tab in enumerate(race_tabs):
             'index': i+1,
             'date': r_date.strftime('%Y/%m/%d'),
             'title': r_title,
-            'condition': f"{r_surface}{r_dist} ({r_cond})",
+            'condition': r_cond_str,
             'df': df
         })
 
@@ -72,12 +74,29 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
     for rc in race_configs:
         if rc['df'] is not None:
             df = rc['df'].copy()
+            
+            # 間隔スコア
+            if '間隔(週)' in df.columns:
+                df['間隔スコア'] = df['間隔(週)'].apply(lambda w: 10 if 2 <= w <= 8 else (8 if w <= 16 else 6))
+            else:
+                df['間隔スコア'] = 8
+
+            # 前走不利フラグ補正 (1なら不利ありとしてポテンシャル補正)
+            if '前走不利' in df.columns:
+                df['不利補正'] = df['前走不利'].apply(lambda x: 1.05 if x == 1 or x == True or str(x).lower()=='true' else 1.0)
+            else:
+                df['不利補正'] = 1.0
+
+            # AI Score calculation incorporating 前走不利 bonus
             df['AIスコア'] = (
-                df['スピード指数'] * 0.4 +
-                df['距離適性'] * 0.2 +
-                df['スタミナ'] * 0.1 +
-                (df['騎手勝率'] * 100) * 0.15 +
-                (10 / df['直近5走平均着順']) * 0.15
+                (
+                    df['スピード指数'] * 0.33 +
+                    df['距離適性'] * 0.18 +
+                    df['スタミナ'] * 0.10 +
+                    (df['騎手勝率'] * 100) * 0.14 +
+                    (10 / df['直近5走平均着順']) * 0.10 +
+                    df['間隔スコア'] * 0.10
+                ) * df['不利補正']
             ).round(1)
 
             stats = {}
