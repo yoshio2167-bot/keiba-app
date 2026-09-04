@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import random
+import zipfile
+import io
+import os
 
 st.title("🏇 中央競馬・土日開催 全3場全12R 予想＆実績検証シミュレーター")
 
@@ -24,29 +27,45 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 1. 複数CSVファイルのドラッグ＆ドロップ対応（全72ファイル一括ドロップ可能）
-st.subheader("1. 出馬表データ（複数CSV一括ドラッグ＆ドロップ対応）")
-uploaded_files = st.file_uploader(
-    "土日全72レースのCSVファイル（sat_... や sun_...）をまとめてここにドラッグ＆ドロップしてください", 
-    type=["csv"], 
-    accept_multiple_files=True
+# 1. ZIPファイル または 複数CSVのドラッグ＆ドロップ対応
+st.subheader("1. 出馬表データ（ZIPファイル または CSV一括ドロップ対応）")
+uploaded_file = st.file_uploader(
+    "ZIPファイル（例: keiba_data_72races.zip など）またはCSVファイルをここにドラッグ＆ドロップしてください", 
+    type=["zip", "csv"], 
+    accept_multiple_files=False
 )
 
-target_filename = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
 matched_df = None
+extracted_files = {}
 
-if uploaded_files:
-    for file in uploaded_files:
-        if file.name.lower() == target_filename.lower():
-            try:
-                matched_df = pd.read_csv(file, encoding='utf-8')
-            except UnicodeDecodeError:
-                matched_df = pd.read_csv(file, encoding='shift-jis')
-            st.success(f"📁 アップロードされたファイル群から「{file.name}」を自動マッチして読み込みました！")
-            break
-    
-    if matched_df is None:
-        st.warning(f"⚠️ アップロードされたファイルの中に「{target_filename}」が見つかりませんでした。標準の自動生成データを使用します。")
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.zip'):
+        try:
+            with zipfile.ZipFile(io.BytesIO(uploaded_file.read())) as z:
+                for filename in z.namelist():
+                    if filename.endswith('.csv'):
+                        with z.open(filename) as f:
+                            base_name = os.path.basename(filename)
+                            extracted_files[base_name.lower()] = f.read()
+            st.success(f"📦 ZIPファイル「{uploaded_file.name}」からCSVデータを読み込みました！")
+        except Exception as e:
+            st.error(f"ZIPファイルの読み込みに失敗しました: {e}")
+    else:
+        base_name = os.path.basename(uploaded_file.name)
+        extracted_files[base_name.lower()] = uploaded_file.read()
+
+target_filename = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
+
+if extracted_files:
+    if target_filename.lower() in extracted_files:
+        content = extracted_files[target_filename.lower()]
+        try:
+            matched_df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
+        except UnicodeDecodeError:
+            matched_df = pd.read_csv(io.BytesIO(content), encoding='shift-jis')
+        st.success(f"📁 「{target_filename}」を自動マッチして読み込みました！")
+    else:
+        st.warning(f"⚠️ アップロードされたデータの中に「{target_filename}」が見つかりませんでした。標準の自動生成データを使用します。")
 
 if matched_df is not None:
     df = matched_df
@@ -74,8 +93,8 @@ else:
         '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
         '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
     })
-    if not uploaded_files:
-        st.info(f"※ CSV未選択のため、**{selected_day}・{selected_course} {selected_race}** の標準データを使用しています。")
+    if not uploaded_file:
+        st.info(f"※ ZIP未選択のため、**{selected_day}・{selected_course} {selected_race}** の標準データを使用しています。")
 
 # 安全セーフティカラム確認
 default_columns = {
