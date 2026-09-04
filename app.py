@@ -6,36 +6,44 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホの縦画面でスクロールがいらないよう、テーブル高さを完全にコンパクト化
+# スマホの縦画面で一切スクロールが出ないよう余白を完全に排除
 st.markdown("""
     <style>
     table.dataframe {
-        font-size: 10px !important;
+        font-size: 9px !important;
     }
     th, td {
-        padding: 2px 4px !important;
+        padding: 1px 3px !important;
         text-align: center !important;
     }
     .stDataFrame {
         width: 100%;
-        font-size: 10px;
+        font-size: 9px;
     }
     div.block-container {
-        padding-top: 0.3rem;
-        padding-bottom: 0.3rem;
-        padding-left: 0.2rem;
-        padding-right: 0.2rem;
+        padding-top: 0.1rem !important;
+        padding-bottom: 0.1rem !important;
+        padding-left: 0.1rem !important;
+        padding-right: 0.1rem !important;
     }
     h1 {
-        font-size: 1.2rem !important;
+        font-size: 1.0rem !important;
+        margin-bottom: 0rem !important;
     }
     h2, h3 {
-        font-size: 1.0rem !important;
+        font-size: 0.9rem !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        padding: 4px 8px;
+        font-size: 11px;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏇 中央競馬 AI予想シミュレータ")
+st.title("🏇 中央競馬 AI予想")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
@@ -54,13 +62,11 @@ paces = ["ミドル", "スロー", "ハイ"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
-        st.subheader(f"🏁 第 {i+1}R 条件とデータ")
-        
-        input_mode = st.radio(f"読込 #{i+1}", ["テキスト", "CSV"], key=f"mode_{i}", horizontal=True)
+        input_mode = st.radio(f"読込 #{i+1}", ["テキスト", "CSV"], key=f"mode_{i}", horizontal=True, label_visibility="collapsed")
 
         df = None
         if input_mode == "テキスト":
-            pasted = st.text_area(f"ペースト #{i+1}", height=80, value="", key=f"text_{i}")
+            pasted = st.text_area(f"ペースト #{i+1}", height=65, value="", key=f"text_{i}", placeholder="CSVペースト")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -71,7 +77,6 @@ for i, tab in enumerate(race_tabs):
             if up_file is not None:
                 df = pd.read_csv(up_file, encoding='utf-8-sig')
 
-        # 自動ペース判定
         auto_pace_index = 0
         if df is not None and '脚質' in df.columns:
             kyaku_list = df['脚質'].astype(str).tolist()
@@ -84,32 +89,25 @@ for i, tab in enumerate(race_tabs):
 
         c1, c2 = st.columns(2)
         with c1:
-            r_date = st.date_input(f"日付 #{i+1}", date(2026, 9, 5), key=f"date_{i}")
-            r_loc = st.selectbox(f"場所 #{i+1}", locations, index=0 if i==0 else (1 if i==1 else 2), key=f"loc_{i}")
-            r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}")
-            r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}")
+            r_loc = st.selectbox(f"場所 #{i+1}", locations, index=0 if i==0 else (1 if i==1 else 2), key=f"loc_{i}", label_visibility="collapsed")
+            r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}", label_visibility="collapsed")
+            r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
         with c2:
-            r_num = st.selectbox(f"R #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
-            r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
-            r_dir = st.selectbox(f"回り #{i+1}", ["右", "左", "直線"], index=0, key=f"dir_{i}")
-            r_cond = st.selectbox(f"馬場 #{i+1}", ["良", "稍重", "重", "不良"], index=0, key=f"cond_{i}")
-
-        r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_index, key=f"pace_{i}")
+            r_num = st.selectbox(f"R #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}", label_visibility="collapsed")
+            r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}", label_visibility="collapsed")
+            r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_index, key=f"pace_{i}", label_visibility="collapsed")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
-        r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond} / {r_pace}ペース)"
+        r_cond_str = f"{r_surface}{r_dist} ({r_pace}ペース)"
 
         race_configs.append({
             'index': i+1,
-            'date': r_date.strftime('%Y/%m/%d'),
+            'date': date(2026, 9, 5).strftime('%Y/%m/%d'),
             'title': r_title,
             'condition': r_cond_str,
             'pace': r_pace,
             'df': df
         })
-
-st.markdown("---")
-st.header("🎲 シミュレーション実行")
 
 if st.button("🚀 一括実行", type="primary", use_container_width=True):
     batch_results = []
@@ -220,33 +218,18 @@ if st.button("🚀 一括実行", type="primary", use_container_width=True):
 
 if st.session_state['history']:
     st.markdown("---")
-    st.subheader("📂 履歴")
-    
-    if st.button("🗑️ 履歴クリア", use_container_width=True):
-        st.session_state['history'] = []
-        st.rerun()
-
     for idx, item in enumerate(st.session_state['history']):
-        with st.expander(f"#{idx+1} {item['日付']} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
-            st.caption(item['開催情報'])
-            
-            # 高さを出馬頭数に合わせて自動で無駄なく収まるよう調整（スクロール不要に）
+        with st.expander(f"#{idx+1} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
             row_count = len(item['結果df'])
-            calc_height = min(max(row_count * 26 + 35, 120), 300)
+            calc_height = min(row_count * 20 + 28, 180)
             
             st.dataframe(item['結果df'], use_container_width=True, height=calc_height)
             
-            csv_data = item['結果df'].reset_index().to_csv(index=False, encoding='utf-8-sig')
-            st.download_button(
-                label=f"📥 CSV (#{idx+1})",
-                data=csv_data,
-                file_name=f"sim_{idx+1}.csv",
-                mime="text/csv",
-                key=f"dl_{idx}",
-                use_container_width=True
-            )
-            if st.button(f"削除 (#{idx+1})", key=f"del_{idx}", use_container_width=True):
-                st.session_state['history'].pop(idx)
-                st.rerun()
-else:
-    st.info("データを入力して実行してください。")
+            c_dl, c_del = st.columns(2)
+            with c_dl:
+                csv_data = item['結果df'].reset_index().to_csv(index=False, encoding='utf-8-sig')
+                st.download_button(label="📥CSV", data=csv_data, file_name=f"sim_{idx+1}.csv", mime="text/csv", key=f"dl_{idx}", use_container_width=True)
+            with c_del:
+                if st.button(f"🗑️削除", key=f"del_{idx}", use_container_width=True):
+                    st.session_state['history'].pop(idx)
+                    st.rerun()
