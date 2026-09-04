@@ -6,48 +6,36 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホ画面で縦スクロールが絶対に出ないようにするCSS完全版
+# スマホ画面で表が綺麗に収まり、縦スクロールや切れを防ぐすっきりとしたスタイル
 st.markdown("""
     <style>
     .block-container {
-        padding: 2px !important;
+        padding: 0.5rem 0.5rem !important;
         max-width: 100% !important;
     }
-    .stDataFrame, div[data-testid="stDataFrame"], div[data-testid="dataframe-container"] {
-        max-height: 140px !important;
-        overflow-y: hidden !important;
-    }
     table {
-        font-size: 9px !important;
+        font-size: 11px !important;
     }
     th, td {
-        padding: 1px 3px !important;
+        padding: 4px 6px !important;
         text-align: center !important;
     }
-    h1, h2, h3 {
-        font-size: 0.9rem !important;
-        margin: 0px !important;
-        padding: 0px !important;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 1px;
+    h1 {
+        font-size: 1.1rem !important;
+        text-align: center;
+        margin-bottom: 0.5rem !important;
     }
     .stTabs [data-baseweb="tab"] {
-        padding: 2px 4px;
-        font-size: 10px;
+        padding: 4px 8px;
+        font-size: 11px;
     }
     p, label {
-        font-size: 10px !important;
-        margin: 0px !important;
-    }
-    .streamlit-expanderHeader {
         font-size: 11px !important;
-        padding: 2px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏇 AI予想")
+st.title("🏇 AI予想シミュレータ")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
@@ -67,7 +55,7 @@ paces = ["ミドル", "スロー", "ハイ"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
-        pasted = st.text_area(f"ペースト #{i+1}", height=45, value="", key=f"text_{i}", placeholder="CSVをここにペースト")
+        pasted = st.text_area(f"ペースト #{i+1}", height=70, value="", key=f"text_{i}", placeholder="CSVデータをここにペースト")
 
         df = None
         if pasted:
@@ -76,8 +64,7 @@ for i, tab in enumerate(race_tabs):
             except Exception as e:
                 pass
 
-        # ペーストされたテキストやデータから自動判定
-        loc_default = 1 # 阪神
+        loc_default = 1
         if pasted and "札幌" in pasted:
             loc_default = 8
         elif pasted and "東京" in pasted:
@@ -85,7 +72,7 @@ for i, tab in enumerate(race_tabs):
         elif pasted and "中山" in pasted:
             loc_default = 0
 
-        class_default = 1 # 未勝利
+        class_default = 1
         if pasted and "新馬" in pasted:
             class_default = 0
         elif pasted and ("G3" in pasted or "G2" in pasted or "G1" in pasted):
@@ -103,16 +90,16 @@ for i, tab in enumerate(race_tabs):
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            r_loc = st.selectbox(f"場#{i+1}", locations, index=loc_default, key=f"loc_{i}", label_visibility="collapsed")
-            r_class = st.selectbox(f"級#{i+1}", classes, index=class_default, key=f"class_{i}", label_visibility="collapsed")
+            r_loc = st.selectbox(f"場#{i+1}", locations, index=loc_default, key=f"loc_{i}")
+            r_class = st.selectbox(f"級#{i+1}", classes, index=class_default, key=f"class_{i}")
         with c2:
-            r_num = st.selectbox(f"R#{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}", label_visibility="collapsed")
-            r_surface = st.selectbox(f"コ#{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
+            r_num = st.selectbox(f"R#{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
+            r_surface = st.selectbox(f"コ#{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}")
         with c3:
-            r_dist = st.selectbox(f"距#{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}", label_visibility="collapsed")
-            r_cond = st.selectbox(f"天#{i+1}", conds, index=0, key=f"cond_{i}", label_visibility="collapsed")
+            r_dist = st.selectbox(f"距#{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
+            r_cond = st.selectbox(f"天#{i+1}", conds, index=0, key=f"cond_{i}")
 
-        r_pace = st.selectbox(f"P#{i+1}", paces, index=auto_pace_index, key=f"pace_{i}", label_visibility="collapsed")
+        r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_index, key=f"pace_{i}")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
         r_cond_str = f"{r_surface}{r_dist} ({r_cond}・{r_pace}ペース)"
@@ -126,7 +113,8 @@ for i, tab in enumerate(race_tabs):
             'df': df
         })
 
-if st.button("🚀 一括実行", type="primary", use_container_width=True):
+st.markdown("<br>", unsafe_allow_html=True)
+if st.button("🚀 一括シミュレーション実行", type="primary", use_container_width=True):
     batch_results = []
     
     for rc in race_configs:
@@ -229,24 +217,26 @@ if st.button("🚀 一括実行", type="primary", use_container_width=True):
     if batch_results:
         for res in batch_results:
             st.session_state['history'].append(res)
-        st.success("🎉完了")
+        st.success("🎉 シミュレーション完了！")
     else:
-        st.warning("データなし")
+        st.warning("有効なデータがありません。")
 
 if st.session_state['history']:
     st.markdown("---")
+    st.subheader("📂 予想結果一覧")
+    
+    if st.button("🗑️ すべての履歴をクリア", use_container_width=True):
+        st.session_state['history'] = []
+        st.rerun()
+
     for idx, item in enumerate(st.session_state['history']):
-        with st.expander(f"#{idx+1} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
+        with st.expander(f"#{idx+1} {item['レース']} ({item['開催情報']})", expanded=(idx==len(st.session_state['history'])-1)):
+            # 行数に合わせて完全に収まる高さに自動調整（途中で切れないように設定）
             row_count = len(item['結果df'])
-            calc_height = min(row_count * 17 + 22, 120)
+            calc_height = row_count * 35 + 38
             
             st.dataframe(item['結果df'], use_container_width=True, height=calc_height)
             
-            c_dl, c_del = st.columns(2)
-            with c_dl:
-                csv_data = item['結果df'].reset_index().to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(label="📥CSV", data=csv_data, file_name=f"sim_{idx+1}.csv", mime="text/csv", key=f"dl_{idx}", use_container_width=True)
-            with c_del:
-                if st.button(f"🗑️削除", key=f"del_{idx}", use_container_width=True):
-                    st.session_state['history'].pop(idx)
-                    st.rerun()
+            if st.button(f"この結果を削除 (#{idx+1})", key=f"del_{idx}", use_container_width=True):
+                st.session_state['history'].pop(idx)
+                st.rerun()
