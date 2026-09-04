@@ -6,7 +6,6 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホ画面で表が綺麗に収まり、縦スクロールや切れを防ぐすっきりとしたスタイル
 st.markdown("""
     <style>
     .block-container {
@@ -57,26 +56,37 @@ for i, tab in enumerate(race_tabs):
     with tab:
         pasted = st.text_area(f"ペースト #{i+1}", height=70, value="", key=f"text_{i}", placeholder="CSVデータをここにペースト")
 
+        # ペーストされた内容から場所・クラスを自動判定
+        loc_idx = 1 # デフォルト阪神
+        if pasted:
+            if "札幌" in pasted: loc_idx = locations.index("札幌")
+            elif "東京" in pasted: loc_idx = locations.index("東京")
+            elif "中山" in pasted: loc_idx = locations.index("中山")
+            elif "京都" in pasted: loc_idx = locations.index("京都")
+            elif "中京" in pasted: loc_idx = locations.index("中京")
+            elif "新潟" in pasted: loc_idx = locations.index("新潟")
+            elif "小倉" in pasted: loc_idx = locations.index("小倉")
+            elif "福島" in pasted: loc_idx = locations.index("福島")
+            elif "函館" in pasted: loc_idx = locations.index("函館")
+            elif "阪神" in pasted: loc_idx = locations.index("阪神")
+
+        class_idx = 1 # デフォルト未勝利
+        if pasted:
+            if "新馬" in pasted: class_idx = classes.index("新馬")
+            elif "G3" in pasted: class_idx = classes.index("G3")
+            elif "G2" in pasted: class_idx = classes.index("G2")
+            elif "G1" in pasted: class_idx = classes.index("G1")
+            elif "オープン" in pasted or "OP" in pasted: class_idx = classes.index("オープン")
+            elif "1勝クラス" in pasted: class_idx = classes.index("1勝クラス")
+            elif "2勝クラス" in pasted: class_idx = classes.index("2勝クラス")
+            elif "3勝クラス" in pasted: class_idx = classes.index("3勝クラス")
+
         df = None
         if pasted:
             try:
                 df = pd.read_csv(io.StringIO(pasted))
             except Exception as e:
                 pass
-
-        loc_default = 1
-        if pasted and "札幌" in pasted:
-            loc_default = 8
-        elif pasted and "東京" in pasted:
-            loc_default = 2
-        elif pasted and "中山" in pasted:
-            loc_default = 0
-
-        class_default = 1
-        if pasted and "新馬" in pasted:
-            class_default = 0
-        elif pasted and ("G3" in pasted or "G2" in pasted or "G1" in pasted):
-            class_default = 7
 
         auto_pace_index = 0
         if df is not None and '脚質' in df.columns:
@@ -90,8 +100,8 @@ for i, tab in enumerate(race_tabs):
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            r_loc = st.selectbox(f"場#{i+1}", locations, index=loc_default, key=f"loc_{i}")
-            r_class = st.selectbox(f"級#{i+1}", classes, index=class_default, key=f"class_{i}")
+            r_loc = st.selectbox(f"場#{i+1}", locations, index=loc_idx, key=f"loc_{i}")
+            r_class = st.selectbox(f"級#{i+1}", classes, index=class_idx, key=f"class_{i}")
         with c2:
             r_num = st.selectbox(f"R#{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
             r_surface = st.selectbox(f"コ#{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}")
@@ -231,7 +241,6 @@ if st.session_state['history']:
 
     for idx, item in enumerate(st.session_state['history']):
         with st.expander(f"#{idx+1} {item['レース']} ({item['開催情報']})", expanded=(idx==len(st.session_state['history'])-1)):
-            # 行数に合わせて完全に収まる高さに自動調整（途中で切れないように設定）
             row_count = len(item['結果df'])
             calc_height = row_count * 35 + 38
             
