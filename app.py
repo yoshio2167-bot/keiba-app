@@ -8,10 +8,14 @@ st.set_page_config(page_title="中央競馬AI予想・シミュレーション�
 
 st.title("🏇 中央競馬 AI予想 & 100回シミュレーション")
 
-st.sidebar.header("データ入力・管理")
+st.sidebar.header("開催情報・データ設定")
+race_location = st.sidebar.selectbox("開催地", ["阪神", "中山", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"], index=0)
+race_distance = st.sidebar.text_input("距離", "ダート1200m")
+track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"], index=0)
+weather = st.sidebar.selectbox("天候", ["晴", "曇", "小雨", "雨"], index=0)
 
-# Data loading mode
-input_mode = st.sidebar.radio("データ読込方法", ["ZIP一括アップロード", "CSVファイル個別アップロード", "直接テキストペースト", "内蔵サンプルデータ（日曜阪神10R）"])
+st.sidebar.header("データ入力・管理")
+input_mode = st.sidebar.radio("データ読込方法", ["内蔵サンプルデータ（日曜阪神10R）", "直接テキストペースト", "CSVファイル個別アップロード", "ZIP一括アップロード"])
 
 @st.cache_data
 def load_default_hanshin():
@@ -72,11 +76,22 @@ elif input_mode == "ZIP一括アップロード":
                     df = pd.read_csv(f, encoding='utf-8-sig')
 
 if df is not None:
+    # Display race metadata header
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("開催地", race_location)
+    with col2:
+        st.metric("距離", race_distance)
+    with col3:
+        st.metric("馬場状態", track_condition)
+    with col4:
+        st.metric("天候", weather)
+
+    st.markdown("---")
     st.subheader("📋 出馬表データ")
     st.dataframe(df, use_container_width=True)
 
     st.subheader("🤖 AI予想スコア算出")
-    # Simple AI score formula
     df['AIスコア'] = (
         df['スピード指数'] * 0.4 +
         df['距離適性'] * 0.2 +
@@ -90,17 +105,28 @@ if df is not None:
 
     st.subheader("🎲 100回レースシミュレーション")
     if st.button("シミュレーション実行"):
-        wins = {name: 0 for name in df['馬名']}
+        wins = {}
+        for _, row in df.iterrows():
+            wins[row['馬名']] = {'馬番': row['馬番'], '単勝オッズ': row['単勝オッズ'], '勝利回数': 0}
+
         sim_count = 100
         for _ in range(sim_count):
-            # Monte Carlo based on AI score + random noise
-            scores = [score + random.gauss(0, 5) for score in df['AIスコア']]
+            scores = [row['AIスコア'] + random.gauss(0, 5) for _, row in df.iterrows()]
             winner_idx = scores.index(max(scores))
             winner_name = df.loc[winner_idx, '馬名']
-            wins[winner_name] += 1
+            wins[winner_name]['勝利回数'] += 1
 
-        sim_df = pd.DataFrame(list(wins.items()), columns=['馬名', '勝利回数']).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
-        sim_df['勝率(%)'] = (sim_df['勝利回数'] / sim_count) * 100
+        sim_list = []
+        for name, info in wins.items():
+            sim_list.append({
+                '馬番': info['馬番'],
+                '馬名': name,
+                '単勝オッズ': info['単勝オッズ'],
+                '勝利回数': info['勝利回数'],
+                '勝率(%)': (info['勝利回数'] / sim_count) * 100
+            })
+
+        sim_df = pd.DataFrame(sim_list).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
         st.dataframe(sim_df, use_container_width=True)
 else:
     st.info("左側のメニューからデータを読み込んでください。")
