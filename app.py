@@ -2,15 +2,30 @@ import streamlit as st
 import pandas as pd
 import random
 
-st.title("🏇 中央競馬・土日開催 全3場全12R 予想＆実績検証シミュレーター")
+st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
 
-# サイドバーで曜日、競馬場、レース選択
-st.sidebar.header("📍 開催選択")
-selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"])
+# メインレース一発ジャンプ機能（ショートカット）
+st.sidebar.header("⚡ クイック選択 (メイン等)")
+quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜メイン (11R)", "日曜メイン (11R)"])
+
+if quick_jump == "土曜メイン (11R)":
+    default_day_idx = 0
+    default_race_num = 11
+elif quick_jump == "日曜メイン (11R)":
+    default_day_idx = 1
+    default_race_num = 11
+else:
+    default_day_idx = 0
+    default_race_num = 1
+
+# 開催選択
+st.sidebar.header("📍 開催・レース設定")
+selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"], index=default_day_idx)
 selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
 
 race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
-selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options)
+selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options, index=default_race_num-1)
+race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
 
 surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
 distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"])
@@ -19,39 +34,42 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 出馬表データの自動生成
-race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
-seed_key = hash(selected_day) + hash(selected_course) + race_num * 37
-random.seed(seed_key)
+# 出馬表データの自動生成（キャッシュまたはセッションで保持して編集を維持）
+data_key = f"df_{selected_day}_{selected_course}_{race_num}"
+if data_key not in st.session_state:
+    seed_key = hash(selected_day) + hash(selected_course) + race_num * 37
+    random.seed(seed_key)
 
-num_horses = 14 if race_num == 11 else 12
-base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
+    num_horses = 14 if race_num == 11 else 12
+    base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
 
-horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
-odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
+    horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
+    odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
 
-df = pd.DataFrame({
-    '枠番': [(i % 8) + 1 for i in range(num_horses)],
-    '馬番': [i + 1 for i in range(num_horses)],
-    '馬名': horses,
-    '単勝オッズ': odds,
-    '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
-    '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
-    'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
-    '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
-    '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
-    'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
-    '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
-    '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
-})
+    st.session_state[data_key] = pd.DataFrame({
+        '枠番': [(i % 8) + 1 for i in range(num_horses)],
+        '馬番': [i + 1 for i in range(num_horses)],
+        '馬名': horses,
+        '単勝オッズ': odds,
+        '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
+        '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
+        'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
+        '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
+        '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
+        'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
+        '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
+        '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
+    })
 
-st.subheader("1. 出馬表データ（自動生成・確認用）")
-st.dataframe(df)
+st.subheader("1. 出馬表データの確認・編集（スマホから直接タップして変更可能）")
+st.markdown("💡 スマホの画面でオッズや馬名を直接タップして書き換えることができます。")
+edited_df = st.data_editor(st.session_state[data_key], key=f"editor_{data_key}")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
 
 if st.button("AI予想＆買い目を実行"):
+    df = edited_df.copy()
     max_rank = 10.0
     df['直近成績スコア'] = (max_rank - df['直近5走平均着順'].clip(1, 10)) * 10
     df['上がり3Fスコア'] = (40.0 - df['上がり3F'].clip(32, 40)) * 10
