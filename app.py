@@ -23,7 +23,7 @@ with col_dir:
 with col_sur:
     race_surface = st.selectbox("コース", ["芝", "ダート", "障害"], index=0)
 
-race_distance = st.sidebar.text_input("距離 (m)", "1600m")
+race_distance = st.sidebar.selectbox("距離", ["1000m", "1200m", "1400m", "1600m", "1800m", "2000m", "2200m", "2400m", "2500m", "3000m", "3200m"], index=3)
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"], index=0)
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "小雨", "雨"], index=0)
 
