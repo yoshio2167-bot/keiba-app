@@ -19,7 +19,7 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 1. データの自動生成・ロード（ファイル不要）
+# 1. 出馬表データの生成
 st.subheader("1. 出馬表データ（自動生成版）")
 
 race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
@@ -48,9 +48,10 @@ df = pd.DataFrame({
 })
 st.info(f"※ **{selected_day}・{selected_course} {selected_race}** の出馬表データを自動生成しました。")
 
-# 2. データの編集画面
+# 2. データの編集画面（ユニークキーを付与して確実に反映）
 st.subheader("2. 出馬馬データの確認・調整")
-edited_df = st.data_editor(df, num_rows="dynamic")
+editor_key = f"editor_{selected_day}_{selected_course}_{selected_race}"
+edited_df = st.data_editor(df, num_rows="dynamic", key=editor_key)
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
