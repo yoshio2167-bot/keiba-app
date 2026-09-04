@@ -24,16 +24,32 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 1. 任意のCSVファイルアップロード（ドラッグ＆ドロップ対応）
-st.subheader("1. 出馬表データ（CSVファイルのドラッグ＆ドロップ または 自動生成）")
-uploaded_file = st.file_uploader("実際の出馬表CSVファイルをここにドラッグ＆ドロップしてください", type=["csv"])
+# 1. 複数CSVファイルのドラッグ＆ドロップ対応（全72ファイル一括ドロップ可能）
+st.subheader("1. 出馬表データ（複数CSV一括ドラッグ＆ドロップ対応）")
+uploaded_files = st.file_uploader(
+    "土日全72レースのCSVファイル（sat_... や sun_...）をまとめてここにドラッグ＆ドロップしてください", 
+    type=["csv"], 
+    accept_multiple_files=True
+)
 
-if uploaded_file is not None:
-    try:
-        df = pd.read_csv(uploaded_file, encoding='utf-8')
-    except UnicodeDecodeError:
-        df = pd.read_csv(uploaded_file, encoding='shift-jis')
-    st.success(f"アップロードされたファイル「{uploaded_file.name}」を読み込みました！")
+target_filename = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
+matched_df = None
+
+if uploaded_files:
+    for file in uploaded_files:
+        if file.name.lower() == target_filename.lower():
+            try:
+                matched_df = pd.read_csv(file, encoding='utf-8')
+            except UnicodeDecodeError:
+                matched_df = pd.read_csv(file, encoding='shift-jis')
+            st.success(f"📁 アップロードされたファイル群から「{file.name}」を自動マッチして読み込みました！")
+            break
+    
+    if matched_df is None:
+        st.warning(f"⚠️ アップロードされたファイルの中に「{target_filename}」が見つかりませんでした。標準の自動生成データを使用します。")
+
+if matched_df is not None:
+    df = matched_df
 else:
     seed_key = hash(day_prefix) + hash(course_prefix) + race_num * 37
     random.seed(seed_key)
@@ -58,7 +74,8 @@ else:
         '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
         '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
     })
-    st.info(f"※ CSV未選択のため、**{selected_day}・{selected_course} {selected_race}** の標準データを使用しています（上部にCSVをドラッグ＆ドロップして差し替え可能）。")
+    if not uploaded_files:
+        st.info(f"※ CSV未選択のため、**{selected_day}・{selected_course} {selected_race}** の標準データを使用しています。")
 
 # 安全セーフティカラム確認
 default_columns = {
