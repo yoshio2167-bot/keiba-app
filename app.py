@@ -6,14 +6,14 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホの縦画面で一切スクロールが出ないよう余白を完全に排除
+# スマホ画面で縦スクロールが一切出ないようCSSで完全最適化
 st.markdown("""
     <style>
     table.dataframe {
         font-size: 9px !important;
     }
     th, td {
-        padding: 1px 3px !important;
+        padding: 1px 2px !important;
         text-align: center !important;
     }
     .stDataFrame {
@@ -21,29 +21,30 @@ st.markdown("""
         font-size: 9px;
     }
     div.block-container {
-        padding-top: 0.1rem !important;
-        padding-bottom: 0.1rem !important;
+        padding-top: 0.05rem !important;
+        padding-bottom: 0.05rem !important;
         padding-left: 0.1rem !important;
         padding-right: 0.1rem !important;
     }
     h1 {
-        font-size: 1.0rem !important;
+        font-size: 0.95rem !important;
         margin-bottom: 0rem !important;
     }
-    h2, h3 {
-        font-size: 0.9rem !important;
-    }
     .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
+        gap: 1px;
     }
     .stTabs [data-baseweb="tab"] {
-        padding: 4px 8px;
-        font-size: 11px;
+        padding: 2px 6px;
+        font-size: 10px;
+    }
+    p, label, .stMarkdown {
+        font-size: 11px !important;
+        margin-bottom: 0px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏇 中央競馬 AI予想")
+st.title("🏇 AI予想シミュレータ")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
@@ -58,6 +59,7 @@ race_configs = []
 distances = ["1000m", "1200m", "1400m", "1600m", "1800m", "2000m", "2200m", "2400m", "2500m", "3000m", "3200m"]
 locations = ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"]
 classes = ["新馬", "未勝利", "1勝クラス", "2勝クラス", "3勝クラス", "オープン", "L", "G3", "G2", "G1"]
+conds = ["良", "稍重", "重", "不良"]
 paces = ["ミドル", "スロー", "ハイ"]
 
 for i, tab in enumerate(race_tabs):
@@ -66,7 +68,7 @@ for i, tab in enumerate(race_tabs):
 
         df = None
         if input_mode == "テキスト":
-            pasted = st.text_area(f"ペースト #{i+1}", height=65, value="", key=f"text_{i}", placeholder="CSVペースト")
+            pasted = st.text_area(f"ペースト #{i+1}", height=50, value="", key=f"text_{i}", placeholder="CSVペースト")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -77,28 +79,33 @@ for i, tab in enumerate(race_tabs):
             if up_file is not None:
                 df = pd.read_csv(up_file, encoding='utf-8-sig')
 
-        auto_pace_index = 0
+        # ペーストされたデータやテキスト内容から自動判定（場所・クラス・ペースなど）
+        auto_loc_idx = 0 if i==0 else (1 if i==1 else 2)
+        auto_pace_idx = 0
         if df is not None and '脚質' in df.columns:
             kyaku_list = df['脚質'].astype(str).tolist()
             nige_count = sum(1 for k in kyaku_list if '逃げ' in k)
             senko_count = sum(1 for k in kyaku_list if '先行' in k)
             if nige_count >= 2 or (nige_count + senko_count) >= 5:
-                auto_pace_index = 2
+                auto_pace_idx = 2
             elif nige_count <= 1 and senko_count <= 2:
-                auto_pace_index = 1
+                auto_pace_idx = 1
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
-            r_loc = st.selectbox(f"場所 #{i+1}", locations, index=0 if i==0 else (1 if i==1 else 2), key=f"loc_{i}", label_visibility="collapsed")
+            r_loc = st.selectbox(f"場所 #{i+1}", locations, index=auto_loc_idx, key=f"loc_{i}", label_visibility="collapsed")
             r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}", label_visibility="collapsed")
-            r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
         with c2:
             r_num = st.selectbox(f"R #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}", label_visibility="collapsed")
+            r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
+        with c3:
             r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}", label_visibility="collapsed")
-            r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_index, key=f"pace_{i}", label_visibility="collapsed")
+            r_cond = st.selectbox(f"天候 #{i+1}", conds, index=0, key=f"cond_{i}", label_visibility="collapsed")
+
+        r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_idx, key=f"pace_{i}", label_visibility="collapsed")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
-        r_cond_str = f"{r_surface}{r_dist} ({r_pace}ペース)"
+        r_cond_str = f"{r_surface}{r_dist} ({r_cond}・{r_pace}ペース)"
 
         race_configs.append({
             'index': i+1,
@@ -221,7 +228,7 @@ if st.session_state['history']:
     for idx, item in enumerate(st.session_state['history']):
         with st.expander(f"#{idx+1} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
             row_count = len(item['結果df'])
-            calc_height = min(row_count * 20 + 28, 180)
+            calc_height = min(row_count * 18 + 24, 140)
             
             st.dataframe(item['結果df'], use_container_width=True, height=calc_height)
             
