@@ -7,9 +7,13 @@ st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
 
 # クイック選択 (メイン等)
 st.sidebar.header("⚡ クイック選択")
-quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜メイン (11R)", "日曜メイン (11R)"])
+quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜阪神1R (実馬表)", "土曜メイン (11R)", "日曜メイン (11R)"])
 
-if quick_jump == "土曜メイン (11R)":
+if quick_jump == "土曜阪神1R (実馬表)":
+    default_day_idx = 0
+    default_course_idx = 0
+    default_race_num = 1
+elif quick_jump == "土曜メイン (11R)":
     default_day_idx = 0
     default_course_idx = 0
     default_race_num = 11
@@ -42,38 +46,37 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 対象CSVファイルの自動読み込み
+# 対象CSVファイルの自動読み込み（キャッシュクリアして常に最新ファイルを読み込む）
 target_csv = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
 data_key = f"df_{target_csv}"
 
-if data_key not in st.session_state:
-    if os.path.exists(target_csv):
-        try:
-            st.session_state[data_key] = pd.read_csv(target_csv, encoding='utf-8')
-        except UnicodeDecodeError:
-            st.session_state[data_key] = pd.read_csv(target_csv, encoding='shift-jis')
-    else:
-        seed_key = hash(target_csv) * 37
-        random.seed(seed_key)
-        num_horses = 14 if race_num == 11 else 12
-        base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
-        horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
-        odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
+if os.path.exists(target_csv):
+    try:
+        st.session_state[data_key] = pd.read_csv(target_csv, encoding='utf-8-sig')
+    except Exception:
+        st.session_state[data_key] = pd.read_csv(target_csv, encoding='shift-jis')
+else:
+    seed_key = hash(target_csv) * 37
+    random.seed(seed_key)
+    num_horses = 14 if race_num == 11 else 12
+    base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
+    horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
+    odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
 
-        st.session_state[data_key] = pd.DataFrame({
-            '枠番': [(i % 8) + 1 for i in range(num_horses)],
-            '馬番': [i + 1 for i in range(num_horses)],
-            '馬名': horses,
-            '単勝オッズ': odds,
-            '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
-            '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
-            'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
-            '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
-            '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
-            'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
-            '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
-            '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
-        })
+    st.session_state[data_key] = pd.DataFrame({
+        '枠番': [(i % 8) + 1 for i in range(num_horses)],
+        '馬番': [i + 1 for i in range(num_horses)],
+        '馬名': horses,
+        '単勝オッズ': odds,
+        '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
+        '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
+        'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
+        '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
+        '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
+        'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
+        '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
+        '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
+    })
 
 st.subheader(f"1. 出馬表データの確認・編集 ({target_csv})")
 st.markdown("💡 スマホの画面でオッズや馬名を直接タップして書き換えることができます。")
