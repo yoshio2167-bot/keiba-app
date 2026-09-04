@@ -6,45 +6,48 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホ画面で縦スクロールが一切出ないようCSSで完全最適化
+# スマホ画面で縦スクロールが絶対に出ないようにするCSS完全版
 st.markdown("""
     <style>
-    table.dataframe {
+    .block-container {
+        padding: 2px !important;
+        max-width: 100% !important;
+    }
+    .stDataFrame, div[data-testid="stDataFrame"], div[data-testid="dataframe-container"] {
+        max-height: 140px !important;
+        overflow-y: hidden !important;
+    }
+    table {
         font-size: 9px !important;
     }
     th, td {
-        padding: 1px 2px !important;
+        padding: 1px 3px !important;
         text-align: center !important;
     }
-    .stDataFrame {
-        width: 100%;
-        font-size: 9px;
-    }
-    div.block-container {
-        padding-top: 0.05rem !important;
-        padding-bottom: 0.05rem !important;
-        padding-left: 0.1rem !important;
-        padding-right: 0.1rem !important;
-    }
-    h1 {
-        font-size: 0.95rem !important;
-        margin-bottom: 0rem !important;
+    h1, h2, h3 {
+        font-size: 0.9rem !important;
+        margin: 0px !important;
+        padding: 0px !important;
     }
     .stTabs [data-baseweb="tab-list"] {
         gap: 1px;
     }
     .stTabs [data-baseweb="tab"] {
-        padding: 2px 6px;
+        padding: 2px 4px;
         font-size: 10px;
     }
-    p, label, .stMarkdown {
+    p, label {
+        font-size: 10px !important;
+        margin: 0px !important;
+    }
+    .streamlit-expanderHeader {
         font-size: 11px !important;
-        margin-bottom: 0px !important;
+        padding: 2px !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏇 AI予想シミュレータ")
+st.title("🏇 AI予想")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
@@ -64,45 +67,52 @@ paces = ["ミドル", "スロー", "ハイ"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
-        input_mode = st.radio(f"読込 #{i+1}", ["テキスト", "CSV"], key=f"mode_{i}", horizontal=True, label_visibility="collapsed")
+        pasted = st.text_area(f"ペースト #{i+1}", height=45, value="", key=f"text_{i}", placeholder="CSVをここにペースト")
 
         df = None
-        if input_mode == "テキスト":
-            pasted = st.text_area(f"ペースト #{i+1}", height=50, value="", key=f"text_{i}", placeholder="CSVペースト")
-            if pasted:
-                try:
-                    df = pd.read_csv(io.StringIO(pasted))
-                except Exception as e:
-                    st.error(f"エラー: {e}")
-        else:
-            up_file = st.file_uploader(f"CSV #{i+1}", type=["csv"], key=f"up_{i}")
-            if up_file is not None:
-                df = pd.read_csv(up_file, encoding='utf-8-sig')
+        if pasted:
+            try:
+                df = pd.read_csv(io.StringIO(pasted))
+            except Exception as e:
+                pass
 
-        # ペーストされたデータやテキスト内容から自動判定（場所・クラス・ペースなど）
-        auto_loc_idx = 0 if i==0 else (1 if i==1 else 2)
-        auto_pace_idx = 0
+        # ペーストされたテキストやデータから自動判定
+        loc_default = 1 # 阪神
+        if pasted and "札幌" in pasted:
+            loc_default = 8
+        elif pasted and "東京" in pasted:
+            loc_default = 2
+        elif pasted and "中山" in pasted:
+            loc_default = 0
+
+        class_default = 1 # 未勝利
+        if pasted and "新馬" in pasted:
+            class_default = 0
+        elif pasted and ("G3" in pasted or "G2" in pasted or "G1" in pasted):
+            class_default = 7
+
+        auto_pace_index = 0
         if df is not None and '脚質' in df.columns:
             kyaku_list = df['脚質'].astype(str).tolist()
             nige_count = sum(1 for k in kyaku_list if '逃げ' in k)
             senko_count = sum(1 for k in kyaku_list if '先行' in k)
             if nige_count >= 2 or (nige_count + senko_count) >= 5:
-                auto_pace_idx = 2
+                auto_pace_index = 2
             elif nige_count <= 1 and senko_count <= 2:
-                auto_pace_idx = 1
+                auto_pace_index = 1
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            r_loc = st.selectbox(f"場所 #{i+1}", locations, index=auto_loc_idx, key=f"loc_{i}", label_visibility="collapsed")
-            r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}", label_visibility="collapsed")
+            r_loc = st.selectbox(f"場#{i+1}", locations, index=loc_default, key=f"loc_{i}", label_visibility="collapsed")
+            r_class = st.selectbox(f"級#{i+1}", classes, index=class_default, key=f"class_{i}", label_visibility="collapsed")
         with c2:
-            r_num = st.selectbox(f"R #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}", label_visibility="collapsed")
-            r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
+            r_num = st.selectbox(f"R#{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}", label_visibility="collapsed")
+            r_surface = st.selectbox(f"コ#{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}", label_visibility="collapsed")
         with c3:
-            r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}", label_visibility="collapsed")
-            r_cond = st.selectbox(f"天候 #{i+1}", conds, index=0, key=f"cond_{i}", label_visibility="collapsed")
+            r_dist = st.selectbox(f"距#{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}", label_visibility="collapsed")
+            r_cond = st.selectbox(f"天#{i+1}", conds, index=0, key=f"cond_{i}", label_visibility="collapsed")
 
-        r_pace = st.selectbox(f"ペース #{i+1}", paces, index=auto_pace_idx, key=f"pace_{i}", label_visibility="collapsed")
+        r_pace = st.selectbox(f"P#{i+1}", paces, index=auto_pace_index, key=f"pace_{i}", label_visibility="collapsed")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
         r_cond_str = f"{r_surface}{r_dist} ({r_cond}・{r_pace}ペース)"
@@ -219,16 +229,16 @@ if st.button("🚀 一括実行", type="primary", use_container_width=True):
     if batch_results:
         for res in batch_results:
             st.session_state['history'].append(res)
-        st.success("🎉 完了！")
+        st.success("🎉完了")
     else:
-        st.warning("データがありません。")
+        st.warning("データなし")
 
 if st.session_state['history']:
     st.markdown("---")
     for idx, item in enumerate(st.session_state['history']):
         with st.expander(f"#{idx+1} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
             row_count = len(item['結果df'])
-            calc_height = min(row_count * 18 + 24, 140)
+            calc_height = min(row_count * 17 + 22, 120)
             
             st.dataframe(item['結果df'], use_container_width=True, height=calc_height)
             
