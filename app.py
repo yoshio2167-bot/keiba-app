@@ -81,13 +81,13 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
             else:
                 df['間隔スコア'] = 8
 
-            # 前走不利フラグ補正 (1なら不利ありとしてポテンシャル補正)
+            # 前走不利補正
             if '前走不利' in df.columns:
                 df['不利補正'] = df['前走不利'].apply(lambda x: 1.05 if x == 1 or x == True or str(x).lower()=='true' else 1.0)
             else:
                 df['不利補正'] = 1.0
 
-            # AI Score calculation incorporating 前走不利 bonus
+            # AI Score calculation
             df['AIスコア'] = (
                 (
                     df['スピード指数'] * 0.33 +
@@ -122,13 +122,11 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
                     '馬番': info['馬番'],
                     '馬名': name,
                     '単勝オッズ': info['単勝オッズ'],
-                    '勝利回数': info['勝利回数'],
-                    '勝率(%)': (info['勝利回数'] / sim_count) * 100,
-                    '3位以内回数': info['3位以内回数'],
-                    '複勝率(%)': (info['3位以内回数'] / sim_count) * 100
+                    '勝利回数(回)': info['勝利回数'],
+                    '複勝回数(回)': info['3位以内回数']
                 })
 
-            sim_df = pd.DataFrame(sim_list).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
+            sim_df = pd.DataFrame(sim_list).sort_values(by='勝利回数(回)', ascending=False).reset_index(drop=True)
             batch_results.append({
                 '日付': rc['date'],
                 'レース': rc['title'],
