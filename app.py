@@ -26,6 +26,35 @@ paces = ["ミドルペース", "スローペース", "ハイペース"]
 for i, tab in enumerate(race_tabs):
     with tab:
         st.subheader(f"🏁 第 {i+1} レースの条件とデータ入力")
+        
+        st.markdown("##### 📥 出馬表データの読込")
+        input_mode = st.radio(f"読込方法 #{i+1}", ["直接テキストペースト", "CSVファイルアップロード"], key=f"mode_{i}")
+
+        df = None
+        if input_mode == "直接テキストペースト":
+            pasted = st.text_area(f"CSVテキスト #{i+1} (間隔(週)・前走不利・気性・脚質カラム含む)", height=150, value="", key=f"text_{i}")
+            if pasted:
+                try:
+                    df = pd.read_csv(io.StringIO(pasted))
+                except Exception as e:
+                    st.error(f"パースエラー (#{i+1}): {e}")
+        else:
+            up_file = st.file_uploader(f"CSVアップロード #{i+1}", type=["csv"], key=f"up_{i}")
+            if up_file is not None:
+                df = pd.read_csv(up_file, encoding='utf-8-sig')
+
+        # 自動ペース判定のロジック
+        auto_pace_index = 0 # デフォルト: ミドル
+        if df is not None and '脚質' in df.columns:
+            kyaku_list = df['脚質'].astype(str).tolist()
+            nige_count = sum(1 for k in kyaku_list if '逃げ' in k)
+            senko_count = sum(1 for k in kyaku_list if '先行' in k)
+            
+            if nige_count >= 2 or (nige_count + senko_count) >= 5:
+                auto_pace_index = 2 # ハイペース
+            elif nige_count <= 1 and senko_count <= 2:
+                auto_pace_index = 1 # スローペース
+
         c1, c2, c3 = st.columns(3)
         with c1:
             r_date = st.date_input(f"開催日 #{i+1}", date(2026, 9, 5), key=f"date_{i}")
@@ -38,26 +67,10 @@ for i, tab in enumerate(race_tabs):
         with c3:
             r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
             r_cond = st.selectbox(f"馬場 #{i+1}", ["良", "稍重", "重", "不良"], index=0, key=f"cond_{i}")
-            r_pace = st.selectbox(f"予想ペース #{i+1}", paces, index=0, key=f"pace_{i}")
+            r_pace = st.selectbox(f"予想ペース #{i+1} (自動判定込)", paces, index=auto_pace_index, key=f"pace_{i}")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
         r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond} / {r_pace})"
-
-        st.markdown("##### 📥 出馬表データの読込")
-        input_mode = st.radio(f"読込方法 #{i+1}", ["直接テキストペースト", "CSVファイルアップロード"], key=f"mode_{i}")
-
-        df = None
-        if input_mode == "直接テキストペースト":
-            pasted = st.text_area(f"CSVテキスト #{i+1} (間隔(週)・前走不利・気性カラム含む)", height=150, value="", key=f"text_{i}")
-            if pasted:
-                try:
-                    df = pd.read_csv(io.StringIO(pasted))
-                except Exception as e:
-                    st.error(f"パースエラー (#{i+1}): {e}")
-        else:
-            up_file = st.file_uploader(f"CSVアップロード #{i+1}", type=["csv"], key=f"up_{i}")
-            if up_file is not None:
-                df = pd.read_csv(up_file, encoding='utf-8-sig')
 
         race_configs.append({
             'index': i+1,
