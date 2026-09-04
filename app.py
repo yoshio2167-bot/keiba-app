@@ -3,16 +3,18 @@ import pandas as pd
 import zipfile
 import io
 import random
+from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想・シミュレーションアプリ", layout="wide")
 
 st.title("🏇 中央競馬 AI予想 & 100回シミュレーション")
 
-# Initialize session state for in-app history
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-st.sidebar.header("開催情報・データ設定")
+st.sidebar.header("開催情報・レース設定")
+race_date = st.sidebar.date_input("開催日", date(2026, 9, 5))
+race_name = st.sidebar.text_input("レース名（例: 中山10R 白井特別）", "中山10R 白井特別")
 race_location = st.sidebar.selectbox("開催地", ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"], index=0)
 race_distance = st.sidebar.text_input("距離", "ダート1200m")
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"], index=0)
@@ -46,14 +48,18 @@ elif input_mode == "ZIP一括アップロード":
                     df = pd.read_csv(f, encoding='utf-8-sig')
 
 if df is not None:
-    col1, col2, col3, col4 = st.columns(4)
+    date_str = race_date.strftime('%Y/%m/%d')
+    st.subheader(f"🏁 {date_str} {race_location} — {race_name}")
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
-        st.metric("開催地", race_location)
+        st.metric("開催日", date_str)
     with col2:
-        st.metric("距離", race_distance)
+        st.metric("開催地", race_location)
     with col3:
-        st.metric("馬場状態", track_condition)
+        st.metric("距離", race_distance)
     with col4:
+        st.metric("馬場状態", track_condition)
+    with col5:
         st.metric("天候", weather)
 
     st.markdown("---")
@@ -117,27 +123,27 @@ if df is not None:
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if st.button("💾 アプリ内に結果を保存する"):
-                race_label = f"{race_location} ({race_distance})"
                 st.session_state['history'].append({
-                    'レース': race_label,
+                    '日付': date_str,
+                    'レース名': race_name,
+                    '開催情報': f"{race_location} / {race_distance}",
                     '結果df': st.session_state['current_sim']
                 })
-                st.success("アプリ内履歴に保存しました！")
+                st.success(f"「{date_str} {race_name}」の結果をアプリ内履歴に保存しました！")
         with col_btn2:
             csv_data = st.session_state['current_sim'].to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
                 label="📥 CSVファイルとしてダウンロード",
                 data=csv_data,
-                file_name=f"simulation_result_{race_location}.csv",
+                file_name=f"simulation_result_{date_str.replace('/','')}_{race_name}.csv",
                 mime="text/csv"
             )
 
-    # Display in-app saved history
     if st.session_state['history']:
         st.markdown("---")
-        st.subheader("📂 アプリ内保存履歴（セッション保持）")
+        st.subheader("📂 アプリ内保存履歴（日付・レース別管理）")
         for idx, item in enumerate(st.session_state['history']):
-            with st.expander(f"履歴 #{idx+1}: {item['レース']}"):
+            with st.expander(f"履歴 #{idx+1}: 【{item['日付']} {item['レース名']}】 ({item['開催情報']})"):
                 st.dataframe(item['結果df'], use_container_width=True)
                 if st.button(f"この履歴を削除 #{idx+1}", key=f"del_{idx}"):
                     st.session_state['history'].pop(idx)
