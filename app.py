@@ -1,79 +1,62 @@
 import streamlit as st
 import pandas as pd
 import random
+import os
 
 st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
 
 # クイック選択 (メイン等)
 st.sidebar.header("⚡ クイック選択")
-quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜阪神1R (実馬表)", "土曜メイン (11R)", "日曜メイン (11R)"])
+quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜メイン (11R)", "日曜メイン (11R)"])
 
-if quick_jump == "土曜阪神1R (実馬表)":
-    default_day_idx = 0
-    default_course_idx = 0
-    default_race_num = 1
-    default_surface_idx = 1  # ダート
-    default_dist_idx = 1     # 1400m
-elif quick_jump == "土曜メイン (11R)":
+if quick_jump == "土曜メイン (11R)":
     default_day_idx = 0
     default_course_idx = 0
     default_race_num = 11
-    default_surface_idx = 0
-    default_dist_idx = 2
 elif quick_jump == "日曜メイン (11R)":
     default_day_idx = 1
     default_course_idx = 2
     default_race_num = 11
-    default_surface_idx = 0
-    default_dist_idx = 4
 else:
     default_day_idx = 0
     default_course_idx = 0
     default_race_num = 1
-    default_surface_idx = 0
-    default_dist_idx = 2
 
 # 開催・レース設定（サイドバー）
 st.sidebar.header("📍 開催・レース設定")
 selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"], index=default_day_idx)
-selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"], index=default_course_idx)
+day_prefix = "sat" if selected_day == "土曜日" else "sun"
+
+selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
+course_prefix_map = {"阪神": "hanshin", "中山": "nakayama", "東京": "tokyo"}
+course_prefix = course_prefix_map[selected_course]
 
 race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
 selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options, index=default_race_num-1)
 race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
 
-surface = st.sidebar.radio("コース種別", ["芝", "ダート"], index=default_surface_idx)
-distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"], index=default_dist_idx)
+surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
+distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"])
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 出馬表データの定義（土曜阪神1Rは実際のデータを反映）
-data_key = f"df_{selected_day}_{selected_course}_{race_num}"
-if data_key not in st.session_state:
-    if selected_day == "土曜日" and selected_course == "阪神" and race_num == 1:
-        st.session_state[data_key] = pd.DataFrame({
-            '枠番': [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4],
-            '馬番': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-            '馬名': ['テイオーワン', 'ロードアルタイル', 'リバティベル', 'コントレイルボーイ', 'イクイノックス', 'ダノンインパクト', 'ドウデュース', 'グランブリッジ', 'シャドウフォール', 'レッドゲイル', 'ファントムソード', 'ブルーインパルス'],
-            '単勝オッズ': [2.4, 5.1, 8.3, 12.5, 15.0, 18.2, 22.1, 35.4, 42.0, 50.1, 75.3, 110.2],
-            '脚質': ['先行', '差し', '逃げ', '差し', '追込', '先行', '差し', '逃げ', '先行', '追込', '差し', '追込'],
-            '上がり3F': [34.2, 33.8, 35.0, 34.1, 33.5, 34.6, 34.0, 35.2, 34.5, 33.9, 34.8, 33.7],
-            'スピード指数': [88, 90, 85, 89, 92, 86, 88, 83, 86, 91, 84, 87],
-            '騎手勝率': [0.18, 0.21, 0.12, 0.15, 0.22, 0.10, 0.14, 0.08, 0.11, 0.19, 0.09, 0.13],
-            '距離適性': [85, 88, 82, 86, 90, 84, 87, 80, 85, 89, 81, 86],
-            'スタミナ': [84, 86, 83, 85, 88, 82, 85, 81, 84, 87, 82, 85],
-            '間隔(週)': [3, 4, 2, 5, 6, 3, 4, 8, 2, 5, 3, 4],
-            '直近5走平均着順': [2.1, 3.0, 4.2, 3.5, 1.8, 5.0, 3.8, 6.2, 4.5, 2.8, 5.5, 4.0]
-        })
-    else:
-        seed_key = hash(selected_day) + hash(selected_course) + race_num * 37
-        random.seed(seed_key)
+# 対象CSVファイルの自動読み込み
+target_csv = f"{day_prefix}_{course_prefix}_r{race_num}.csv"
+data_key = f"df_{target_csv}"
 
+if data_key not in st.session_state:
+    if os.path.exists(target_csv):
+        try:
+            st.session_state[data_key] = pd.read_csv(target_csv, encoding='utf-8')
+        except UnicodeDecodeError:
+            st.session_state[data_key] = pd.read_csv(target_csv, encoding='shift-jis')
+    else:
+        seed_key = hash(target_csv) * 37
+        random.seed(seed_key)
         num_horses = 14 if race_num == 11 else 12
         base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
-
         horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
         odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
 
@@ -92,7 +75,8 @@ if data_key not in st.session_state:
             '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
         })
 
-st.subheader("1. 出馬表データの確認・編集（スマホから直接タップして変更可能）")
+st.subheader(f"1. 出馬表データの確認・編集 ({target_csv})")
+st.markdown("💡 スマホの画面でオッズや馬名を直接タップして書き換えることができます。")
 edited_df = st.data_editor(st.session_state[data_key], key=f"editor_{data_key}")
 
 if 'result_df' not in st.session_state:
