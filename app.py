@@ -16,11 +16,19 @@ st.sidebar.header("開催情報・レース設定")
 race_date = st.sidebar.date_input("開催日", date(2026, 9, 5))
 race_location = st.sidebar.selectbox("開催地", ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"], index=0)
 race_number = st.sidebar.selectbox("レース番号", [f"{i}R" for i in range(1, 13)], index=10)
-race_distance = st.sidebar.text_input("距離", "芝1600m")
+
+col_dir, col_sur = st.sidebar.columns(2)
+with col_dir:
+    race_direction = st.selectbox("回り", ["右", "左", "直線"], index=0)
+with col_sur:
+    race_surface = st.selectbox("コース", ["芝", "ダート", "障害"], index=0)
+
+race_distance = st.sidebar.text_input("距離 (m)", "1600m")
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"], index=0)
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "小雨", "雨"], index=0)
 
 race_title = f"{race_location}{race_number}"
+full_condition_str = f"{race_surface}{race_distance} ({race_direction}・{track_condition})"
 
 st.sidebar.header("データ入力・管理")
 input_mode = st.sidebar.radio("データ読込方法", ["直接テキストペースト", "CSVファイル個別アップロード", "ZIP一括アップロード"])
@@ -59,7 +67,7 @@ if df is not None:
     with col2:
         st.metric("レース", race_title)
     with col3:
-        st.metric("距離", race_distance)
+        st.metric("コース", full_condition_str)
     with col4:
         st.metric("馬場状態", track_condition)
     with col5:
@@ -129,7 +137,7 @@ if df is not None:
                 st.session_state['history'].append({
                     '日付': date_str,
                     'レース': race_title,
-                    '開催情報': f"{race_distance} / {track_condition}",
+                    '開催情報': full_condition_str,
                     '結果df': st.session_state['current_sim']
                 })
                 st.success(f"「{date_str} {race_title}」の結果をアプリ内履歴に保存しました！")
