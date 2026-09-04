@@ -1,17 +1,61 @@
 import streamlit as st
 import pandas as pd
 import random
+import zipfile
+import io
+import os
 
 st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
 
-# ファイルアップロード機能
-st.sidebar.header("📁 出馬表CSVのアップロード")
-uploaded_file = st.sidebar.file_uploader("レースのCSVファイルをアップロード", type=["csv"])
+# ファイルアップロード機能（ZIPおよびCSV対応）
+st.sidebar.header("📁 出馬表データのアップロード")
+uploaded_file = st.sidebar.file_uploader("ZIPファイル または CSVファイルをアップロード", type=["zip", "csv"])
+
+# 保存されたZIPやCSVの解析
+uploaded_dfs = {}
+if uploaded_file is not None:
+    if uploaded_file.name.endswith('.zip') or uploaded_file.name.endswith('.ZIP'):
+        try:
+            with zipfile.ZipFile(uploaded_file, 'r') as z:
+                for filename in z.namelist():
+                    if filename.endswith('.csv') and not filename.startswith('__MACOSX'):
+                        with z.open(filename) as f:
+                            try:
+                                df_temp = pd.read_csv(f, encoding='utf-8-sig')
+                            except Exception:
+                                try:
+                                    f.seek(0)
+                                    df_temp = pd.read_csv(f, encoding='shift-jis')
+                                except Exception:
+                                    f.seek(0)
+                                    df_temp = pd.read_csv(f, encoding='latin1')
+                            key_name = filename.split('/')[-1].replace('.csv', '')
+                            uploaded_dfs[key_name] = df_temp
+            st.sidebar.success(f"📦 ZIPファイルから {len(uploaded_dfs)} レース分のデータを読み込みました！")
+        except Exception as e:
+            st.sidebar.error(f"ZIPファイルの読み込みに失敗しました: {e}")
+    else:
+        try:
+            df_single = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+        except Exception:
+            try:
+                uploaded_file.seek(0)
+                df_single = pd.read_csv(uploaded_file, encoding='shift-jis')
+            except Exception:
+                uploaded_file.seek(0)
+                df_single = pd.read_csv(uploaded_file, encoding='latin1')
+        uploaded_dfs['single_uploaded'] = df_single
+        st.sidebar.success(f"📂 CSVファイルを読み込みました: {uploaded_file.name}")
 
 # 開催・レース設定（サイドバー）
 st.sidebar.header("📍 開催・レース設定")
 selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"])
+day_prefix = "sat" if selected_day == "土曜日" else "sun"
+
 selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
+course_prefix_map = {"阪神": "hanshin", "中山": "nakayama", "東京": "tokyo"}
+course_prefix = course_prefix_map[selected_course]
+
 race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
 selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options)
 race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
@@ -23,16 +67,18 @@ track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", 
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# データ読み込み
-if uploaded_file is not None:
+# 対象データの決定
+target_key = f"{day_prefix}_{course_prefix}_r{race_num}"
+
+if target_key in uploaded_dfs:
+    df_input = uploaded_dfs[target_key]
+elif len(uploaded_dfs) == 1 and 'single_uploaded' in uploaded_dfs:
+    df_input = uploaded_dfs['single_uploaded']
+elif os.path.exists(f"{target_key}.csv"):
     try:
-        df_input = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+        df_input = pd.read_csv(f"{target_key}.csv", encoding='utf-8-sig')
     except Exception:
-        try:
-            df_input = pd.read_csv(uploaded_file, encoding='shift-jis')
-        except Exception:
-            df_input = pd.read_csv(uploaded_file, encoding='latin1')
-    st.success(f"📂 アップロードされたファイルを読み込みました: {uploaded_file.name}")
+        df_input = pd.read_csv(f"{target_key}.csv", encoding='shift-jis')
 else:
     seed_key = race_num * 37
     random.seed(seed_key)
@@ -57,7 +103,7 @@ else:
     })
 
 st.subheader("1. 出馬表データの確認・編集（スマホから直接タップして変更可能）")
-edited_df = st.data_editor(df_input, key="main_data_editor")
+edited_df = st.data_editor(df_input, key=f"editor_{target_key}")
 
 if 'result_df' not in st.session_state:
     st.session_state.result_df = None
@@ -117,7 +163,7 @@ if st.button("AI予想＆買い目を実行"):
     result_df = df.sort_values(by='スコア', ascending=False).reset_index(drop=True)
     
     印リスト = []
-    for i in {range(len(result_df))}:
+    for i in range(len(result_df)):
         if i == 0: 印リスト.append("◎ 本命")
         elif i == 1: 印リスト.append("○ 対抗")
         elif i == 2: 印リスト.append("▲ 単穴")
