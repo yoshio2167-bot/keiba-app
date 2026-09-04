@@ -21,6 +21,7 @@ race_configs = []
 distances = ["1000m", "1200m", "1400m", "1600m", "1800m", "2000m", "2200m", "2400m", "2500m", "3000m", "3200m"]
 locations = ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"]
 classes = ["新馬", "未勝利", "1勝クラス", "2勝クラス", "3勝クラス", "オープン", "L (リステッド)", "G3", "G2", "G1"]
+paces = ["ミドルペース", "スローペース", "ハイペース"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
@@ -37,16 +38,17 @@ for i, tab in enumerate(race_tabs):
         with c3:
             r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
             r_cond = st.selectbox(f"馬場 #{i+1}", ["良", "稍重", "重", "不良"], index=0, key=f"cond_{i}")
+            r_pace = st.selectbox(f"予想ペース #{i+1}", paces, index=0, key=f"pace_{i}")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
-        r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond})"
+        r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond} / {r_pace})"
 
         st.markdown("##### 📥 出馬表データの読込")
         input_mode = st.radio(f"読込方法 #{i+1}", ["直接テキストペースト", "CSVファイルアップロード"], key=f"mode_{i}")
 
         df = None
         if input_mode == "直接テキストペースト":
-            pasted = st.text_area(f"CSVテキストペースト #{i+1} (間隔(週)・前走不利カラム含む)", height=150, value="", key=f"text_{i}")
+            pasted = st.text_area(f"CSVテキスト #{i+1} (間隔(週)・前走不利・気性カラム含む)", height=150, value="", key=f"text_{i}")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -62,6 +64,7 @@ for i, tab in enumerate(race_tabs):
             'date': r_date.strftime('%Y/%m/%d'),
             'title': r_title,
             'condition': r_cond_str,
+            'pace': r_pace,
             'df': df
         })
 
@@ -87,16 +90,54 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
             else:
                 df['不利補正'] = 1.0
 
-            # AI Score calculation
+            # 馬の気性補正
+            def calc_kishou(val):
+                if pd.isna(val):
+                    return 1.0
+                s = str(val).strip()
+                if s in ['気性難', '悪', '入れ込み']:
+                    return 0.95
+                elif s in ['おっとり', '優', '穏和', '安定']:
+                    return 1.03
+                try:
+                    num = float(val)
+                    return num
+                except:
+                    return 1.0
+
+            if '気性' in df.columns:
+                df['気性補正'] = df['気性'].apply(calc_kishou)
+            else:
+                df['気性補正'] = 1.0
+
+            # ペース×脚質による展開係数補正
+            def calc_pace_coeff(row, pace_type):
+                kyaku = str(row.get('脚質', '差し'))
+                if pace_type == 'スローペース':
+                    if '逃げ' in kyaku: return 1.08
+                    elif '先行' in kyaku: return 1.04
+                    elif '追込' in kyaku: return 0.95
+                    else: return 1.0
+                elif pace_type == 'ハイペース':
+                    if '追込' in kyaku or '差し' in kyaku: return 1.06
+                    elif '逃げ' in kyaku: return 0.93
+                    else: return 0.98
+                else:
+                    return 1.0
+
+            pace_type = rc['pace']
+            df['展開補正'] = df.apply(lambda r: calc_pace_coeff(r, pace_type), axis=1)
+
+            # AI Score calculation incorporating all factors
             df['AIスコア'] = (
                 (
-                    df['スピード指数'] * 0.33 +
-                    df['距離適性'] * 0.18 +
+                    df['スピード指数'] * 0.30 +
+                    df['距離適性'] * 0.15 +
                     df['スタミナ'] * 0.10 +
-                    (df['騎手勝率'] * 100) * 0.14 +
+                    (df['騎手勝率'] * 100) * 0.13 +
                     (10 / df['直近5走平均着順']) * 0.10 +
                     df['間隔スコア'] * 0.10
-                ) * df['不利補正']
+                ) * df['不利補正'] * df['気性補正'] * df['展開補正']
             ).round(1)
 
             stats = {}
