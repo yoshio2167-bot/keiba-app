@@ -6,32 +6,31 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# iPhone 12 mini (375px width) 向けの超コンパクト最適化CSS
+# スマホの縦画面でスクロールがいらないよう、テーブル高さを完全にコンパクト化
 st.markdown("""
     <style>
-    /* テーブル全体のフォントを小さくし、余白を極限まで削減 */
     table.dataframe {
-        font-size: 11px !important;
+        font-size: 10px !important;
     }
     th, td {
-        padding: 4px 6px !important;
+        padding: 2px 4px !important;
         text-align: center !important;
     }
     .stDataFrame {
         width: 100%;
-        font-size: 11px;
+        font-size: 10px;
     }
     div.block-container {
-        padding-top: 0.4rem;
-        padding-bottom: 0.4rem;
-        padding-left: 0.3rem;
-        padding-right: 0.3rem;
+        padding-top: 0.3rem;
+        padding-bottom: 0.3rem;
+        padding-left: 0.2rem;
+        padding-right: 0.2rem;
     }
     h1 {
-        font-size: 1.3rem !important;
+        font-size: 1.2rem !important;
     }
     h2, h3 {
-        font-size: 1.1rem !important;
+        font-size: 1.0rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -61,7 +60,7 @@ for i, tab in enumerate(race_tabs):
 
         df = None
         if input_mode == "テキスト":
-            pasted = st.text_area(f"ペースト #{i+1}", height=90, value="", key=f"text_{i}")
+            pasted = st.text_area(f"ペースト #{i+1}", height=80, value="", key=f"text_{i}")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -110,7 +109,7 @@ for i, tab in enumerate(race_tabs):
         })
 
 st.markdown("---")
-st.header("🎲 シミュレーション実行（100回）")
+st.header("🎲 シミュレーション実行")
 
 if st.button("🚀 一括実行", type="primary", use_container_width=True):
     batch_results = []
@@ -203,8 +202,6 @@ if st.button("🚀 一括実行", type="primary", use_container_width=True):
                 })
 
             sim_df = pd.DataFrame(sim_list).sort_values(by='勝回', ascending=False).reset_index(drop=True)
-            
-            # 馬番をインデックスに設定して不要な順位列を排除
             sim_df = sim_df.set_index('馬番')
 
             batch_results.append({
@@ -217,13 +214,13 @@ if st.button("🚀 一括実行", type="primary", use_container_width=True):
     if batch_results:
         for res in batch_results:
             st.session_state['history'].append(res)
-        st.success("🎉 完了しました！")
+        st.success("🎉 完了！")
     else:
-        st.warning("データが入力されていません。")
+        st.warning("データがありません。")
 
 if st.session_state['history']:
     st.markdown("---")
-    st.subheader("📂 保存履歴")
+    st.subheader("📂 履歴")
     
     if st.button("🗑️ 履歴クリア", use_container_width=True):
         st.session_state['history'] = []
@@ -233,7 +230,11 @@ if st.session_state['history']:
         with st.expander(f"#{idx+1} {item['日付']} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
             st.caption(item['開催情報'])
             
-            st.dataframe(item['結果df'], use_container_width=True, height=220)
+            # 高さを出馬頭数に合わせて自動で無駄なく収まるよう調整（スクロール不要に）
+            row_count = len(item['結果df'])
+            calc_height = min(max(row_count * 26 + 35, 120), 300)
+            
+            st.dataframe(item['結果df'], use_container_width=True, height=calc_height)
             
             csv_data = item['結果df'].reset_index().to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
