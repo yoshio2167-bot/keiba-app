@@ -6,7 +6,22 @@ from datetime import date
 
 st.set_page_config(page_title="中央競馬AI予想・複数レースシミュレーション", layout="wide")
 
-st.title("🏇 中央競馬 AI予想 & 複数レース同時シミュレーション（最大5レース）")
+# スマホの縦画面でも見やすくなるよう、CSSでテーブルやフォントサイズを最適化
+st.markdown("""
+    <style>
+    .stDataFrame {
+        font-size: 14px;
+    }
+    div.block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🏇 中央競馬 AI予想 & 複数レースシミュレーション")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
@@ -14,7 +29,7 @@ if 'history' not in st.session_state:
 st.sidebar.header("⚙️ レース数・タブ設定")
 num_races = st.sidebar.slider("シミュレーションするレース数", min_value=1, max_value=5, value=3)
 
-race_tabs = st.tabs([f"第{i+1}レース設定" for i in range(num_races)])
+race_tabs = st.tabs([f"第{i+1}R" for i in range(num_races)])
 
 race_configs = []
 
@@ -25,49 +40,49 @@ paces = ["ミドルペース", "スローペース", "ハイペース"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
-        st.subheader(f"🏁 第 {i+1} レースの条件とデータ入力")
+        st.subheader(f"🏁 第 {i+1} レースの条件とデータ")
         
         st.markdown("##### 📥 出馬表データの読込")
-        input_mode = st.radio(f"読込方法 #{i+1}", ["直接テキストペースト", "CSVファイルアップロード"], key=f"mode_{i}")
+        input_mode = st.radio(f"読込方法 #{i+1}", ["テキストペースト", "CSVアップロード"], key=f"mode_{i}", horizontal=True)
 
         df = None
-        if input_mode == "直接テキストペースト":
-            pasted = st.text_area(f"CSVテキスト #{i+1} (間隔(週)・前走不利・気性・脚質カラム含む)", height=150, value="", key=f"text_{i}")
+        if input_mode == "テキストペースト":
+            pasted = st.text_area(f"CSVテキスト #{i+1}", height=120, value="", key=f"text_{i}")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
                 except Exception as e:
                     st.error(f"パースエラー (#{i+1}): {e}")
         else:
-            up_file = st.file_uploader(f"CSVアップロード #{i+1}", type=["csv"], key=f"up_{i}")
+            up_file = st.file_uploader(f"CSV #{i+1}", type=["csv"], key=f"up_{i}")
             if up_file is not None:
                 df = pd.read_csv(up_file, encoding='utf-8-sig')
 
         # 自動ペース判定のロジック
-        auto_pace_index = 0 # デフォルト: ミドル
+        auto_pace_index = 0
         if df is not None and '脚質' in df.columns:
             kyaku_list = df['脚質'].astype(str).tolist()
             nige_count = sum(1 for k in kyaku_list if '逃げ' in k)
             senko_count = sum(1 for k in kyaku_list if '先行' in k)
             
             if nige_count >= 2 or (nige_count + senko_count) >= 5:
-                auto_pace_index = 2 # ハイペース
+                auto_pace_index = 2
             elif nige_count <= 1 and senko_count <= 2:
-                auto_pace_index = 1 # スローペース
+                auto_pace_index = 1
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
         with c1:
             r_date = st.date_input(f"開催日 #{i+1}", date(2026, 9, 5), key=f"date_{i}")
             r_loc = st.selectbox(f"開催地 #{i+1}", locations, index=0 if i==0 else (1 if i==1 else 2), key=f"loc_{i}")
             r_class = st.selectbox(f"クラス #{i+1}", classes, index=1, key=f"class_{i}")
-        with c2:
-            r_num = st.selectbox(f"レース番号 #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
             r_surface = st.selectbox(f"コース #{i+1}", ["芝", "ダート", "障害"], index=0 if i!=1 else 1, key=f"surf_{i}")
-            r_dir = st.selectbox(f"回り #{i+1}", ["右", "左", "直線"], index=0, key=f"dir_{i}")
-        with c3:
+        with c2:
+            r_num = st.selectbox(f"レース #{i+1}", [f"{n}R" for n in range(1, 13)], index=9+i if i<3 else i, key=f"num_{i}")
             r_dist = st.selectbox(f"距離 #{i+1}", distances, index=3 if i!=1 else 2, key=f"dist_{i}")
+            r_dir = st.selectbox(f"回り #{i+1}", ["右", "左", "直線"], index=0, key=f"dir_{i}")
             r_cond = st.selectbox(f"馬場 #{i+1}", ["良", "稍重", "重", "不良"], index=0, key=f"cond_{i}")
-            r_pace = st.selectbox(f"予想ペース #{i+1} (自動判定込)", paces, index=auto_pace_index, key=f"pace_{i}")
+
+        r_pace = st.selectbox(f"予想ペース #{i+1}", paces, index=auto_pace_index, key=f"pace_{i}")
 
         r_title = f"{r_loc}{r_num} ({r_class})"
         r_cond_str = f"{r_surface}{r_dist} ({r_dir}・{r_cond} / {r_pace})"
@@ -84,26 +99,23 @@ for i, tab in enumerate(race_tabs):
 st.markdown("---")
 st.header("🎲 一括シミュレーション実行（100回試行）")
 
-if st.button("🚀 すべてのレースでシミュレーションを一斉実行", type="primary"):
+if st.button("🚀 すべてのレースでシミュレーション実行", type="primary", use_container_width=True):
     batch_results = []
     
     for rc in race_configs:
         if rc['df'] is not None:
             df = rc['df'].copy()
             
-            # 間隔スコア
             if '間隔(週)' in df.columns:
                 df['間隔スコア'] = df['間隔(週)'].apply(lambda w: 10 if 2 <= w <= 8 else (8 if w <= 16 else 6))
             else:
                 df['間隔スコア'] = 8
 
-            # 前走不利補正
             if '前走不利' in df.columns:
                 df['不利補正'] = df['前走不利'].apply(lambda x: 1.05 if x == 1 or x == True or str(x).lower()=='true' else 1.0)
             else:
                 df['不利補正'] = 1.0
 
-            # 馬の気性補正
             def calc_kishou(val):
                 if pd.isna(val):
                     return 1.0
@@ -123,7 +135,6 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
             else:
                 df['気性補正'] = 1.0
 
-            # ペース×脚質による展開係数補正
             def calc_pace_coeff(row, pace_type):
                 kyaku = str(row.get('脚質', '差し'))
                 if pace_type == 'スローペース':
@@ -141,7 +152,6 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
             pace_type = rc['pace']
             df['展開補正'] = df.apply(lambda r: calc_pace_coeff(r, pace_type), axis=1)
 
-            # AI Score calculation incorporating all factors
             df['AIスコア'] = (
                 (
                     df['スピード指数'] * 0.30 +
@@ -191,37 +201,34 @@ if st.button("🚀 すべてのレースでシミュレーションを一斉実�
     if batch_results:
         for res in batch_results:
             st.session_state['history'].append(res)
-        st.success(f"🎉 {len(batch_results)}レース分のシミュレーションが完了し、アプリ内履歴に保存されました！")
+        st.success(f"🎉 {len(batch_results)}レースのシミュレーションが完了しました！")
     else:
-        st.warning("有効なデータが入力されているレースがありません。各タブでCSVデータを入力してください。")
+        st.warning("有効なデータが入力されているレースがありません。")
 
 if st.session_state['history']:
     st.markdown("---")
-    st.subheader("📂 アプリ内保存履歴（全レース分・消えずに保持されます）")
+    st.subheader("📂 アプリ内保存履歴")
     
-    col_clear, _ = st.columns([1, 4])
-    with col_clear:
-        if st.button("🗑️ すべての履歴をクリア"):
-            st.session_state['history'] = []
-            st.rerun()
+    if st.button("🗑️ すべての履歴をクリア", use_container_width=True):
+        st.session_state['history'] = []
+        st.rerun()
 
     for idx, item in enumerate(st.session_state['history']):
-        with st.expander(f"履歴 #{idx+1}: 【{item['日付']} {item['レース']}】 ({item['開催情報']})", expanded=(idx==len(st.session_state['history'])-1)):
+        with st.expander(f"#{idx+1}: 【{item['日付']} {item['レース']}】", expanded=(idx==len(st.session_state['history'])-1)):
+            st.caption(f"条件: {item['開催情報']}")
             st.dataframe(item['結果df'], use_container_width=True)
             
-            c_d, c_del = st.columns([2, 1])
-            with c_d:
-                csv_data = item['結果df'].to_csv(index=False, encoding='utf-8-sig')
-                st.download_button(
-                    label=f"📥 この結果をCSVダウンロード (#{idx+1})",
-                    data=csv_data,
-                    file_name=f"sim_result_{item['日付'].replace('/','')}_{item['レース']}.csv",
-                    mime="text/csv",
-                    key=f"dl_{idx}"
-                )
-            with c_del:
-                if st.button(f"この履歴を削除 #{idx+1}", key=f"del_{idx}"):
-                    st.session_state['history'].pop(idx)
-                    st.rerun()
+            csv_data = item['結果df'].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label=f"📥 CSVダウンロード (#{idx+1})",
+                data=csv_data,
+                file_name=f"sim_{item['日付'].replace('/','')}_{item['レース']}.csv",
+                mime="text/csv",
+                key=f"dl_{idx}",
+                use_container_width=True
+            )
+            if st.button(f"この履歴を削除 (#{idx+1})", key=f"del_{idx}", use_container_width=True):
+                st.session_state['history'].pop(idx)
+                st.rerun()
 else:
-    st.info("上のタブで各レースのデータを入力し、「シミュレーション実行」を押してください。結果はここに自動で蓄積されます。")
+    st.info("上のタブでデータを入力し、シミュレーションを実行してください。")
