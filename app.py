@@ -8,6 +8,10 @@ st.set_page_config(page_title="中央競馬AI予想・シミュレーション�
 
 st.title("🏇 中央競馬 AI予想 & 100回シミュレーション")
 
+# Initialize session state for in-app history
+if 'history' not in st.session_state:
+    st.session_state['history'] = []
+
 st.sidebar.header("開催情報・データ設定")
 race_location = st.sidebar.selectbox("開催地", ["中山", "阪神", "東京", "中京", "京都", "新潟", "小倉", "福島", "札幌", "函館"], index=0)
 race_distance = st.sidebar.text_input("距離", "ダート1200m")
@@ -69,7 +73,12 @@ if df is not None:
     st.dataframe(df_sorted[['馬番', '馬名', '単勝オッズ', '脚質', 'AIスコア', 'スピード指数', '騎手勝率']], use_container_width=True)
 
     st.subheader("🎲 100回レースシミュレーション")
-    if st.button("シミュレーション実行"):
+    
+    col_run, col_save = st.columns([1, 1])
+    with col_run:
+        run_sim = st.button("シミュレーション実行")
+
+    if run_sim:
         stats = {}
         for _, row in df.iterrows():
             stats[row['馬名']] = {'馬番': row['馬番'], '単勝オッズ': row['単勝オッズ'], '勝利回数': 0, '3位以内回数': 0}
@@ -100,18 +109,38 @@ if df is not None:
             })
 
         sim_df = pd.DataFrame(sim_list).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
-        st.dataframe(sim_df, use_container_width=True)
+        st.session_state['current_sim'] = sim_df
 
-        # Save simulation result to session state & provide download button
-        st.session_state['sim_result'] = sim_df
+    if 'current_sim' in st.session_state:
+        st.dataframe(st.session_state['current_sim'], use_container_width=True)
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("💾 アプリ内に結果を保存する"):
+                race_label = f"{race_location} ({race_distance})"
+                st.session_state['history'].append({
+                    'レース': race_label,
+                    '結果df': st.session_state['current_sim']
+                })
+                st.success("アプリ内履歴に保存しました！")
+        with col_btn2:
+            csv_data = st.session_state['current_sim'].to_csv(index=False, encoding='utf-8-sig')
+            st.download_button(
+                label="📥 CSVファイルとしてダウンロード",
+                data=csv_data,
+                file_name=f"simulation_result_{race_location}.csv",
+                mime="text/csv"
+            )
 
-    if 'sim_result' in st.session_state:
-        csv_data = st.session_state['sim_result'].to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📥 シミュレーション結果をCSVとして保存（ダウンロード）",
-            data=csv_data,
-            file_name=f"simulation_result_{race_location}.csv",
-            mime="text/csv"
-        )
+    # Display in-app saved history
+    if st.session_state['history']:
+        st.markdown("---")
+        st.subheader("📂 アプリ内保存履歴（セッション保持）")
+        for idx, item in enumerate(st.session_state['history']):
+            with st.expander(f"履歴 #{idx+1}: {item['レース']}"):
+                st.dataframe(item['結果df'], use_container_width=True)
+                if st.button(f"この履歴を削除 #{idx+1}", key=f"del_{idx}"):
+                    st.session_state['history'].pop(idx)
+                    st.rerun()
 else:
     st.info("左側のメニューからデータを読み込んでください。")
