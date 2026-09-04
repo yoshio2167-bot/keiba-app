@@ -4,41 +4,55 @@ import random
 
 st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
 
-# メインレース一発ジャンプ機能（ショートカット）
-st.sidebar.header("⚡ クイック選択 (メイン等)")
-quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜メイン (11R)", "日曜メイン (11R)"])
+# クイック選択 (メイン等)
+st.sidebar.header("⚡ クイック選択")
+quick_jump = st.sidebar.selectbox("注目レース選択", ["通常選択モードを使用", "土曜阪神1R (実馬表)", "土曜メイン (11R)", "日曜メイン (11R)"])
 
-if quick_jump == "土曜メイン (11R)":
+if quick_jump == "土曜阪神1R (実馬表)":
     default_day_idx = 0
+    default_course_idx = 0
+    default_race_num = 1
+    default_surface_idx = 1  # ダート
+    default_dist_idx = 1     # 1400m
+elif quick_jump == "土曜メイン (11R)":
+    default_day_idx = 0
+    default_course_idx = 0
     default_race_num = 11
+    default_surface_idx = 0
+    default_dist_idx = 2
 elif quick_jump == "日曜メイン (11R)":
     default_day_idx = 1
+    default_course_idx = 2
     default_race_num = 11
+    default_surface_idx = 0
+    default_dist_idx = 4
 else:
     default_day_idx = 0
+    default_course_idx = 0
     default_race_num = 1
+    default_surface_idx = 0
+    default_dist_idx = 2
 
-# 開催選択
+# 開催・レース設定（サイドバー）
 st.sidebar.header("📍 開催・レース設定")
 selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"], index=default_day_idx)
-selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
+selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"], index=default_course_idx)
 
 race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
 selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options, index=default_race_num-1)
 race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
 
-surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
-distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"])
+surface = st.sidebar.radio("コース種別", ["芝", "ダート"], index=default_surface_idx)
+distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"], index=default_dist_idx)
 weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
 track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
 
 st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
 
-# 出馬表データの定義（土曜阪神1Rは実際のデータを反映、その他は自動生成）
+# 出馬表データの定義（土曜阪神1Rは実際のデータを反映）
 data_key = f"df_{selected_day}_{selected_course}_{race_num}"
 if data_key not in st.session_state:
     if selected_day == "土曜日" and selected_course == "阪神" and race_num == 1:
-        # 土曜・阪神1Rの実際の出馬表データ
         st.session_state[data_key] = pd.DataFrame({
             '枠番': [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4],
             '馬番': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
@@ -79,7 +93,6 @@ if data_key not in st.session_state:
         })
 
 st.subheader("1. 出馬表データの確認・編集（スマホから直接タップして変更可能）")
-st.markdown("💡 スマホの画面でオッズや馬名を直接タップして書き換えることができます。")
 edited_df = st.data_editor(st.session_state[data_key], key=f"editor_{data_key}")
 
 if 'result_df' not in st.session_state:
@@ -206,8 +219,6 @@ if st.session_state.result_df is not None:
 
     # 3. 実際の結果入力＆検証モード
     st.subheader("🎯 実際の結果（着順）入力 ＆ 的中・回収率検証")
-    st.markdown("レース終了後、実際の1着〜3着の馬番を入力または選択して、AI予想が的中したか検証できます！")
-    
     col1, col2, col3 = st.columns(3)
     with col1:
         actual_1st_no = st.selectbox("実際の1着 馬番", res_df['馬番'].tolist(), index=0)
