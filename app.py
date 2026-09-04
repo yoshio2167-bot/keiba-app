@@ -1,253 +1,106 @@
 import streamlit as st
 import pandas as pd
-import random
 import zipfile
 import io
-import os
+import random
 
-st.title("🏇 中央競馬 AI予想＆実績検証シミュレーター")
+st.set_page_config(page_title="中央競馬AI予想・シミュレーションアプリ", layout="wide")
 
-# ファイルアップロード機能（ZIPおよびCSV対応）
-st.sidebar.header("📁 出馬表データのアップロード")
-uploaded_file = st.sidebar.file_uploader("ZIPファイル または CSVファイルをアップロード", type=["zip", "csv"])
+st.title("🏇 中央競馬 AI予想 & 100回シミュレーション")
 
-# 保存されたZIPやCSVの解析
-uploaded_dfs = {}
-if uploaded_file is not None:
-    if uploaded_file.name.endswith('.zip') or uploaded_file.name.endswith('.ZIP'):
+st.sidebar.header("データ入力・管理")
+
+# Data loading mode
+input_mode = st.sidebar.radio("データ読込方法", ["ZIP一括アップロード", "CSVファイル個別アップロード", "直接テキストペースト", "内蔵サンプルデータ（日曜阪神10R）"])
+
+@st.cache_data
+def load_default_hanshin():
+    data = [
+        {"枠番": 1, "馬番": 1, "馬名": "イミュータブル", "単勝オッズ": 3.2, "脚質": "差し", "上がり3F": 35.1, "スピード指数": 88, "騎手勝率": 0.12, "距離適性": 88, "スタミナ": 85, "間隔(週)": 4, "直近5走平均着順": 3.2},
+        {"枠番": 2, "馬番": 2, "馬名": "ウルスクローム", "単勝オッズ": 5.5, "脚質": "先行", "上がり3F": 34.2, "スピード指数": 90, "騎手勝率": 0.15, "距離適性": 89, "スタミナ": 88, "間隔(週)": 11, "直近5走平均着順": 4.0},
+        {"枠番": 3, "馬番": 3, "馬名": "エムズマインド", "単勝オッズ": 7.1, "脚質": "差し", "上がり3F": 37.1, "スピード指数": 86, "騎手勝率": 0.14, "距離適性": 85, "スタミナ": 82, "間隔(週)": 1, "直近5走平均着順": 4.5},
+        {"枠番": 4, "馬番": 4, "馬名": "クリノオリーブ", "単勝オッズ": 12.0, "脚質": "差し", "上がり3F": 35.8, "スピード指数": 82, "騎手勝率": 0.12, "距離適性": 80, "スタミナ": 80, "間隔(週)": 2, "直近5走平均着順": 5.2},
+        {"枠番": 5, "馬番": 5, "馬名": "スペシャルナンバー", "単勝オッズ": 15.4, "脚質": "先行", "上がり3F": 34.7, "スピード指数": 83, "騎手勝率": 0.18, "距離適性": 85, "スタミナ": 92, "間隔(週)": 7, "直近5走平均着順": 3.8},
+        {"枠番": 6, "馬番": 6, "馬名": "テーオーグレーザー", "単勝オッズ": 18.2, "脚質": "先行", "上がり3F": 35.6, "スピード指数": 81, "騎手勝率": 0.20, "距離適性": 79, "スタミナ": 79, "間隔(週)": 11, "直近5走平均着順": 4.4},
+        {"枠番": 7, "馬番": 7, "馬名": "ピバップ", "単勝オッズ": 24.0, "脚質": "追込", "上がり3F": 40.9, "スピード指数": 84, "騎手勝率": 0.08, "距離適性": 89, "スタミナ": 80, "間隔(週)": 2, "直近5走平均着順": 6.0},
+        {"枠番": 8, "馬番": 8, "馬名": "ボディブロー", "単勝オッズ": 29.5, "脚質": "先行", "上がり3F": 36.0, "スピード指数": 81, "騎手勝率": 0.10, "距離適性": 79, "スタミナ": 79, "間隔(週)": 8, "直近5走平均着順": 5.1},
+        {"枠番": 1, "馬番": 9, "馬名": "メイショウヤーキス", "単勝オッズ": 32.0, "脚質": "差し", "上がり3F": 36.5, "スピード指数": 83, "騎手勝率": 0.11, "距離適性": 82, "スタミナ": 83, "間隔(週)": 3, "直近5走平均着順": 5.5},
+        {"枠番": 2, "馬番": 10, "馬名": "ヨリノレジェンド", "単勝オッズ": 35.0, "脚質": "先行", "上がり3F": 36.2, "スピード指数": 85, "騎手勝率": 0.19, "距離適性": 86, "スタミナ": 86, "間隔(週)": 1, "直近5走平均着順": 3.1},
+        {"枠番": 3, "馬番": 11, "馬名": "ライジン", "単勝オッズ": 38.0, "脚質": "先行", "上がり3F": 36.3, "スピード指数": 84, "騎手勝率": 0.13, "距離適性": 84, "スタミナ": 85, "間隔(週)": 11, "直近5走平均着順": 4.8},
+        {"枠番": 4, "馬番": 12, "馬名": "ランウインディ", "単勝オッズ": 42.0, "脚質": "先行", "上がり3F": 37.7, "スピード指数": 82, "騎手勝率": 0.15, "距離適性": 81, "スタミナ": 82, "間隔(週)": 4, "直近5走平均着順": 5.0},
+        {"枠番": 5, "馬番": 13, "馬名": "ワークソング", "単勝オッズ": 46.0, "脚質": "先行", "上がり3F": 35.9, "スピード指数": 87, "騎手勝率": 0.16, "距離適性": 88, "スタミナ": 89, "間隔(週)": 2, "直近5走平均着順": 4.2}
+    ]
+    return pd.DataFrame(data)
+
+df = None
+
+if input_mode == "内蔵サンプルデータ（日曜阪神10R）":
+    df = load_default_hanshin()
+elif input_mode == "CSVファイル個別アップロード":
+    uploaded_file = st.sidebar.file_uploader("CSVファイルをアップロード", type=["csv"])
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
+elif input_mode == "直接テキストペースト":
+    pasted_text = st.sidebar.text_area("CSV形式のテキストを貼り付け", height=200, value="""枠番,馬番,馬名,単勝オッズ,脚質,上がり3F,スピード指数,騎手勝率,距離適性,スタミナ,間隔(週),直近5走平均着順
+1,1,イミュータブル,3.2,差し,35.1,88,0.12,88,85,4,3.2
+2,2,ウルスクローム,5.5,先行,34.2,90,0.15,89,88,11,4.0
+3,3,エムズマインド,7.1,差し,37.1,86,0.14,85,82,1,4.5
+4,4,クリノオリーブ,12.0,差し,35.8,82,0.12,80,80,2,5.2
+5,5,スペシャルナンバー,15.4,先行,34.7,83,0.18,85,92,7,3.8
+6,6,テーオーグレーザー,18.2,先行,35.6,81,0.2,79,79,11,4.4
+7,7,ピバップ,24.0,追込,40.9,84,0.08,89,80,2,6.0
+8,8,ボディブロー,29.5,先行,36.0,81,0.1,79,79,8,5.1
+1,9,メイショウヤーキス,32.0,差し,36.5,83,0.11,82,83,3,5.5
+2,10,ヨリノレジェンド,35.0,先行,36.2,85,0.19,86,86,1,3.1
+3,11,ライジン,38.0,先行,36.3,84,0.13,84,85,11,4.8
+4,12,ランウインディ,42.0,先行,37.7,82,0.15,81,82,4,5.0
+5,13,ワークソング,46.0,先行,35.9,87,0.16,88,89,2,4.2""")
+    if pasted_text:
         try:
-            with zipfile.ZipFile(uploaded_file, 'r') as z:
-                for filename in z.namelist():
-                    if filename.endswith('.csv') and not filename.startswith('__MACOSX'):
-                        with z.open(filename) as f:
-                            try:
-                                df_temp = pd.read_csv(f, encoding='utf-8-sig')
-                            except Exception:
-                                try:
-                                    f.seek(0)
-                                    df_temp = pd.read_csv(f, encoding='shift-jis')
-                                except Exception:
-                                    f.seek(0)
-                                    df_temp = pd.read_csv(f, encoding='latin1')
-                            key_name = filename.split('/')[-1].replace('.csv', '')
-                            uploaded_dfs[key_name] = df_temp
-            st.sidebar.success(f"📦 ZIPファイルから {len(uploaded_dfs)} レース分のデータを読み込みました！")
+            df = pd.read_csv(io.StringIO(pasted_text))
         except Exception as e:
-            st.sidebar.error(f"ZIPファイルの読み込みに失敗しました: {e}")
-    else:
-        try:
-            df_single = pd.read_csv(uploaded_file, encoding='utf-8-sig')
-        except Exception:
-            try:
-                uploaded_file.seek(0)
-                df_single = pd.read_csv(uploaded_file, encoding='shift-jis')
-            except Exception:
-                uploaded_file.seek(0)
-                df_single = pd.read_csv(uploaded_file, encoding='latin1')
-        uploaded_dfs['single_uploaded'] = df_single
-        st.sidebar.success(f"📂 CSVファイルを読み込みました: {uploaded_file.name}")
+            st.error(f"パースエラー: {e}")
+elif input_mode == "ZIP一括アップロード":
+    zip_file = st.sidebar.file_uploader("全レースZIPファイルをアップロード", type=["zip"])
+    if zip_file is not None:
+        with zipfile.ZipFile(zip_file, 'r') as z:
+            namelist = z.namelist()
+            csv_files = [n for n in namelist if n.endswith('.csv')]
+            selected_csv = st.sidebar.selectbox("レースを選択", csv_files)
+            if selected_csv:
+                with z.open(selected_csv) as f:
+                    df = pd.read_csv(f, encoding='utf-8-sig')
 
-# 開催・レース設定（サイドバー）
-st.sidebar.header("📍 開催・レース設定")
-selected_day = st.sidebar.radio("開催日", ["土曜日", "日曜日"])
-day_prefix = "sat" if selected_day == "土曜日" else "sun"
+if df is not None:
+    st.subheader("📋 出馬表データ")
+    st.dataframe(df, use_container_width=True)
 
-selected_course = st.sidebar.selectbox("競馬場", ["阪神", "中山", "東京"])
-course_prefix_map = {"阪神": "hanshin", "中山": "nakayama", "東京": "tokyo"}
-course_prefix = course_prefix_map[selected_course]
+    st.subheader("🤖 AI予想スコア算出")
+    # Simple AI score formula
+    df['AIスコア'] = (
+        df['スピード指数'] * 0.4 +
+        df['距離適性'] * 0.2 +
+        df['スタミナ'] * 0.1 +
+        (df['騎手勝率'] * 100) * 0.15 +
+        (10 / df['直近5走平均着順']) * 0.15
+    ).round(1)
 
-race_options = [f"第{i}レース (R{i})" for i in range(1, 13)]
-selected_race = st.sidebar.selectbox(f"{selected_course} 全12R 選択", race_options)
-race_num = int(selected_race.replace("第", "").replace("レース", "").split(" ")[0])
+    df_sorted = df.sort_values(by='AIスコア', ascending=False).reset_index(drop=True)
+    st.dataframe(df_sorted[['馬番', '馬名', '単勝オッズ', '脚質', 'AIスコア', 'スピード指数', '騎手勝率']], use_container_width=True)
 
-surface = st.sidebar.radio("コース種別", ["芝", "ダート"])
-distance = st.sidebar.selectbox("距離", ["1200m (短距離)", "1400m", "1600m (マイル)", "1800m", "2000m (中距離)", "2400m以上 (長距離)"])
-weather = st.sidebar.selectbox("天候", ["晴", "曇", "雨", "雪"])
-track_condition = st.sidebar.selectbox("馬場状態", ["良", "稍重", "重", "不良"])
+    st.subheader("🎲 100回レースシミュレーション")
+    if st.button("シミュレーション実行"):
+        wins = {name: 0 for name in df['馬名']}
+        sim_count = 100
+        for _ in range(sim_count):
+            # Monte Carlo based on AI score + random noise
+            scores = [score + random.gauss(0, 5) for score in df['AIスコア']]
+            winner_idx = scores.index(max(scores))
+            winner_name = df.loc[winner_idx, '馬名']
+            wins[winner_name] += 1
 
-st.markdown(f"**現在表示中:** **{selected_day}** / {selected_course} **{selected_race}** ({surface}・{distance}) / 天候: **{weather}** / 馬場: **{track_condition}**")
-
-# 対象データの決定
-target_key = f"{day_prefix}_{course_prefix}_r{race_num}"
-
-if target_key in uploaded_dfs:
-    df_input = uploaded_dfs[target_key]
-elif len(uploaded_dfs) == 1 and 'single_uploaded' in uploaded_dfs:
-    df_input = uploaded_dfs['single_uploaded']
-elif os.path.exists(f"{target_key}.csv"):
-    try:
-        df_input = pd.read_csv(f"{target_key}.csv", encoding='utf-8-sig')
-    except Exception:
-        df_input = pd.read_csv(f"{target_key}.csv", encoding='shift-jis')
+        sim_df = pd.DataFrame(list(wins.items()), columns=['馬名', '勝利回数']).sort_values(by='勝利回数', ascending=False).reset_index(drop=True)
+        sim_df['勝率(%)'] = (sim_df['勝利回数'] / sim_count) * 100
+        st.dataframe(sim_df, use_container_width=True)
 else:
-    seed_key = race_num * 37
-    random.seed(seed_key)
-    num_horses = 14 if race_num == 11 else 12
-    base_names = ['テーオー', 'ロード', 'リバティ', 'コントレイル', 'イクイノックス', 'ダノン', 'ドウデュース', 'グランブリッジ', 'シャドウ', 'レッド', 'ファントム', 'ブルー', 'セイウン', 'ダイワ']
-    horses = [f"{base_names[i % len(base_names)]}{i+1}号" for i in range(num_horses)]
-    odds = [round(1.5 + (i * 2.8) + random.uniform(0.0, 1.5), 1) if i < 3 else round(10.0 + (i * 3.5), 1) for i in range(num_horses)]
-
-    df_input = pd.DataFrame({
-        '枠番': [(i % 8) + 1 for i in range(num_horses)],
-        '馬番': [i + 1 for i in range(num_horses)],
-        '馬名': horses,
-        '単勝オッズ': odds,
-        '脚質': [random.choice(['逃げ', '先行', '差し', '追込']) for _ in range(num_horses)],
-        '上がり3F': [round(random.uniform(33.2, 35.5), 1) for _ in range(num_horses)],
-        'スピード指数': [random.randint(78, 95) for _ in range(num_horses)],
-        '騎手勝率': [round(random.uniform(0.08, 0.22), 2) for _ in range(num_horses)],
-        '距離適性': [random.randint(80, 94) for _ in range(num_horses)],
-        'スタミナ': [random.randint(80, 94) for _ in range(num_horses)],
-        '間隔(週)': [random.randint(2, 10) for _ in range(num_horses)],
-        '直近5走平均着順': [round(random.uniform(1.5, 6.5), 1) for _ in range(num_horses)]
-    })
-
-st.subheader("1. 出馬表データの確認・編集（スマホから直接タップして変更可能）")
-edited_df = st.data_editor(df_input, key=f"editor_{target_key}")
-
-if 'result_df' not in st.session_state:
-    st.session_state.result_df = None
-
-if st.button("AI予想＆買い目を実行"):
-    df = edited_df.copy()
-    max_rank = 10.0
-    df['直近成績スコア'] = (max_rank - df['直近5走平均着順'].clip(1, 10)) * 10
-    df['上がり3Fスコア'] = (40.0 - df['上がり3F'].clip(32, 40)) * 10
-    
-    is_long_straight = selected_course in ["東京", "新潟", "阪神"]
-    is_power_cond = (track_condition in ["重", "不良"]) or (weather in ["雨", "雪"])
-    
-    w_speed = 0.25
-    w_jockey = 0.15
-    w_dist = 0.15
-    w_stamina = 0.10
-    w_recent = 0.10
-    w_3f = 0.15
-    w_interval = 0.10
-
-    if "1200m" in distance or "1400m" in distance:
-        w_speed += 0.05
-        w_3f += 0.05
-        w_stamina -= 0.05
-    elif "2400m" in distance:
-        w_stamina += 0.15
-        w_dist += 0.05
-        w_speed -= 0.10
-
-    if surface == "ダート" or is_power_cond:
-        w_stamina += 0.10
-        w_speed -= 0.05
-        w_3f -= 0.05
-    elif is_long_straight and surface == "芝":
-        w_3f += 0.05
-
-    total_w = w_speed + w_jockey + w_dist + w_stamina + w_recent + w_3f + w_interval
-    w_speed /= total_w
-    w_jockey /= total_w
-    w_dist /= total_w
-    w_stamina /= total_w
-    w_recent /= total_w
-    w_3f /= total_w
-    w_interval /= total_w
-
-    df['スコア'] = (
-        df['スピード指数'] * w_speed +
-        df['騎手勝率'] * 100 * w_jockey +
-        df['距離適性'] * w_dist +
-        df['スタミナ'] * w_stamina +
-        df['直近成績スコア'] * w_recent +
-        df['上がり3Fスコア'] * w_3f +
-        (df['間隔(週)'] * 0.5) * w_interval
-    )
-    
-    result_df = df.sort_values(by='スコア', ascending=False).reset_index(drop=True)
-    
-    印リスト = []
-    for i in range(len(result_df)):
-        if i == 0: 印リスト.append("◎ 本命")
-        elif i == 1: 印リスト.append("○ 対抗")
-        elif i == 2: 印リスト.append("▲ 単穴")
-        elif 3 <= i <= 4: 印リスト.append("△ 連下")
-        else: 印リスト.append("-")
-    
-    result_df['印'] = 印リスト
-    st.session_state.result_df = result_df
-
-if st.session_state.result_df is not None:
-    res_df = st.session_state.result_df
-    
-    st.subheader("📊 予想・印の結果")
-    st.dataframe(res_df[['印', '枠番', '馬番', '馬名', '脚質', '上がり3F', '単勝オッズ', 'スコア']])
-    
-    st.subheader("🎫 焼き鳥防止！おすすめ買い目シミュレーション")
-    if len(res_df) >= 3:
-        本命行 = res_df.loc[res_df['印'] == "◎ 本命"].iloc[0]
-        対抗行 = res_df.loc[res_df['印'] == "○ 対抗"].iloc[0]
-        単穴行 = res_df.loc[res_df['印'] == "▲ 単穴"].iloc[0]
-        
-        st.markdown(f"""
-        * **複勝:** **{本命行['馬番']}番 {本命行['馬名']}**
-        * **ワイド流し:** **{本命行['馬番']}番 － {対抗行['馬番']}番, {単穴行['馬番']}番**
-        """)
-    
-    st.subheader("📈 100回シミュレーション統計 (勝率・複勝率分析)")
-    if st.button("📊 100回レースを自動シミュレートして統計を出す"):
-        with st.spinner("100回シミュレーション実行中..."):
-            wins = {name: 0 for name in res_df['馬名']}
-            podiums = {name: 0 for name in res_df['馬名']}
-            
-            for _ in range(100):
-                sim_df = res_df[['馬番', '馬名', 'スコア']].copy()
-                sim_df['current_pos'] = sim_df['スコア'] + [random.uniform(-10, 10) for _ in range(len(sim_df))]
-                sim_df = sim_df.sort_values(by='current_pos', ascending=False).reset_index(drop=True)
-                
-                winner = sim_df.loc[0, '馬名']
-                wins[winner] += 1
-                
-                for i in range(min(3, len(sim_df))):
-                    p_name = sim_df.loc[i, '馬名']
-                    podiums[p_name] += 1
-            
-            stats_data = []
-            for _, row in res_df.iterrows():
-                m_name = row['馬名']
-                w_count = wins[m_name]
-                p_count = podiums[m_name]
-                stats_data.append({
-                    '枠番': row['枠番'],
-                    '馬番': row['馬番'],
-                    '馬名': m_name,
-                    '1着回数': w_count,
-                    '勝率(%)': f"{w_count / 100 * 100:.1f}%",
-                    '3着内回数': p_count,
-                    '複勝率(%)': f"{p_count / 100 * 100:.1f}%"
-                })
-            
-            stats_df = pd.DataFrame(stats_data).sort_values(by='1着回数', ascending=False).reset_index(drop=True)
-            st.success("100回シミュレーションの集計が完了しました！")
-            st.dataframe(stats_df)
-
-    # 3. 実際の結果入力＆検証モード
-    st.subheader("🎯 実際の結果（着順）入力 ＆ 的中・回収率検証")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        actual_1st_no = st.selectbox("実際の1着 馬番", res_df['馬番'].tolist(), index=0)
-    with col2:
-        actual_2nd_no = st.selectbox("実際の2着 馬番", res_df['馬番'].tolist(), index=min(1, len(res_df)-1))
-    with col3:
-        actual_3rd_no = st.selectbox("実際の3着 馬番", res_df['馬番'].tolist(), index=min(2, len(res_df)-1))
-        
-    if st.button("🏆 検証結果を集計する"):
-        honmei_row = res_df.loc[res_df['印'] == "◎ 本命"].iloc[0]
-        honmei_no = honmei_row['馬番']
-        
-        is_honmei_place = (honmei_no in [actual_1st_no, actual_2nd_no, actual_3rd_no])
-        
-        st.markdown("### 📊 検証レポート")
-        st.write(f"- **AI本命 (◎):** {honmei_row['馬名']} (馬番: {honmei_no})")
-        st.write(f"- **実際の入着:** 1着[{actual_1st_no}番] / 2着[{actual_2nd_no}番] / 3着[{actual_3rd_no}番]")
-        
-        if is_honmei_place:
-            st.success("🎉 **本命馬が馬券圏内（3着以内）好走的中！**")
-        else:
-            st.warning("💦 本命馬は馬券圏外となりました。")
+    st.info("左側のメニューからデータを読み込んでください。")
