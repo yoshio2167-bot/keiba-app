@@ -4,31 +4,45 @@ import io
 import random
 from datetime import date
 
-st.set_page_config(page_title="中央競馬AI予想・複数レースシミュレーション", layout="wide")
+st.set_page_config(page_title="中央競馬AI予想", layout="wide")
 
-# スマホの縦画面に完全最適化（テーブル幅の自動調整・余白削減）
+# iPhone 12 mini (375px width) 向けの超コンパクト最適化CSS
 st.markdown("""
     <style>
+    /* テーブル全体のフォントを小さくし、余白を極限まで削減 */
+    table.dataframe {
+        font-size: 11px !important;
+    }
+    th, td {
+        padding: 4px 6px !important;
+        text-align: center !important;
+    }
     .stDataFrame {
         width: 100%;
-        font-size: 13px;
+        font-size: 11px;
     }
     div.block-container {
-        padding-top: 0.8rem;
-        padding-bottom: 0.8rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+        padding-top: 0.4rem;
+        padding-bottom: 0.4rem;
+        padding-left: 0.3rem;
+        padding-right: 0.3rem;
+    }
+    h1 {
+        font-size: 1.3rem !important;
+    }
+    h2, h3 {
+        font-size: 1.1rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏇 中央競馬 AI予想 & シミュレーション")
+st.title("🏇 中央競馬 AI予想シミュレータ")
 
 if 'history' not in st.session_state:
     st.session_state['history'] = []
 
-st.sidebar.header("⚙️ レース数設定")
-num_races = st.sidebar.slider("シミュレーションするレース数", min_value=1, max_value=5, value=3)
+st.sidebar.header("⚙️ 設定")
+num_races = st.sidebar.slider("レース数", min_value=1, max_value=5, value=3)
 
 race_tabs = st.tabs([f"第{i+1}R" for i in range(num_races)])
 
@@ -41,13 +55,13 @@ paces = ["ミドル", "スロー", "ハイ"]
 
 for i, tab in enumerate(race_tabs):
     with tab:
-        st.subheader(f"🏁 第 {i+1} レース条件とデータ")
+        st.subheader(f"🏁 第 {i+1}R 条件とデータ")
         
-        input_mode = st.radio(f"読込 #{i+1}", ["テキストペースト", "CSVアップロード"], key=f"mode_{i}", horizontal=True)
+        input_mode = st.radio(f"読込 #{i+1}", ["テキスト", "CSV"], key=f"mode_{i}", horizontal=True)
 
         df = None
-        if input_mode == "テキストペースト":
-            pasted = st.text_area(f"CSVテキスト #{i+1}", height=100, value="", key=f"text_{i}")
+        if input_mode == "テキスト":
+            pasted = st.text_area(f"ペースト #{i+1}", height=90, value="", key=f"text_{i}")
             if pasted:
                 try:
                     df = pd.read_csv(io.StringIO(pasted))
@@ -98,7 +112,7 @@ for i, tab in enumerate(race_tabs):
 st.markdown("---")
 st.header("🎲 シミュレーション実行（100回）")
 
-if st.button("🚀 すべてのレースを一括実行", type="primary", use_container_width=True):
+if st.button("🚀 一括実行", type="primary", use_container_width=True):
     batch_results = []
     
     for rc in race_configs:
@@ -181,7 +195,7 @@ if st.button("🚀 すべてのレースを一括実行", type="primary", use_co
             sim_list = []
             for name, info in stats.items():
                 sim_list.append({
-                    '馬番': info['馬番'],
+                    '馬番': int(info['馬番']) if pd.notna(info['馬番']) else 0,
                     '馬名': name,
                     'オッズ': info['単勝オッズ'],
                     '勝回': info['勝利回数'],
@@ -189,6 +203,10 @@ if st.button("🚀 すべてのレースを一括実行", type="primary", use_co
                 })
 
             sim_df = pd.DataFrame(sim_list).sort_values(by='勝回', ascending=False).reset_index(drop=True)
+            
+            # 馬番をインデックスに設定して不要な順位列を排除
+            sim_df = sim_df.set_index('馬番')
+
             batch_results.append({
                 '日付': rc['date'],
                 'レース': rc['title'],
@@ -199,15 +217,15 @@ if st.button("🚀 すべてのレースを一括実行", type="primary", use_co
     if batch_results:
         for res in batch_results:
             st.session_state['history'].append(res)
-        st.success(f"🎉 {len(batch_results)}レース完了しました！")
+        st.success("🎉 完了しました！")
     else:
-        st.warning("データが入力されているレースがありません。")
+        st.warning("データが入力されていません。")
 
 if st.session_state['history']:
     st.markdown("---")
     st.subheader("📂 保存履歴")
     
-    if st.button("🗑️ 履歴をすべてクリア", use_container_width=True):
+    if st.button("🗑️ 履歴クリア", use_container_width=True):
         st.session_state['history'] = []
         st.rerun()
 
@@ -215,20 +233,19 @@ if st.session_state['history']:
         with st.expander(f"#{idx+1} {item['日付']} {item['レース']}", expanded=(idx==len(st.session_state['history'])-1)):
             st.caption(item['開催情報'])
             
-            # スマホでも一覧が収まるようにカラム名をコンパクトにし、高さを自動調整
-            st.dataframe(item['結果df'], use_container_width=True, height=250)
+            st.dataframe(item['結果df'], use_container_width=True, height=220)
             
-            csv_data = item['結果df'].to_csv(index=False, encoding='utf-8-sig')
+            csv_data = item['結果df'].reset_index().to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
-                label=f"📥 CSV下载 (#{idx+1})",
+                label=f"📥 CSV (#{idx+1})",
                 data=csv_data,
-                file_name=f"sim_{item['日付'].replace('/','')}_{item['レース']}.csv",
+                file_name=f"sim_{idx+1}.csv",
                 mime="text/csv",
                 key=f"dl_{idx}",
                 use_container_width=True
             )
-            if st.button(f"この履歴を削除 (#{idx+1})", key=f"del_{idx}", use_container_width=True):
+            if st.button(f"削除 (#{idx+1})", key=f"del_{idx}", use_container_width=True):
                 st.session_state['history'].pop(idx)
                 st.rerun()
 else:
-    st.info("タブでデータを入力し、シミュレーションを実行してください。")
+    st.info("データを入力して実行してください。")
