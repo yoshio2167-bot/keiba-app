@@ -63,9 +63,7 @@ with tab2:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-2.0-flash")
 
-            # 画像をJPEGのバイトデータに確実に変換して渡す
             img_byte_arr = BytesIO()
-            # RGBAなどの場合はRGBに変換
             if image.mode in ("RGBA", "P"):
               image = image.convert("RGB")
             image.save(img_byte_arr, format="JPEG")
@@ -81,6 +79,12 @@ with tab2:
 
             response = model.generate_content([image_part, prompt])
             csv_text = response.text.strip()
+
+            # AIが返した生のテキストを画面に表示（確認用）
+            st.write("--- AIからの生レスポンス ---")
+            st.text(csv_text)
+            st.write("-----------------------------")
+
             csv_text = csv_text.replace("```csv", "").replace("```", "").strip()
 
             df_result = pd.read_csv(StringIO(csv_text))
