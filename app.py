@@ -53,8 +53,8 @@ with tab2:
             )
           else:
             genai.configure(api_key=api_key)
-            # 安定動作する標準モデルを指定
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # 新しいAPIキーに対応している最新モデルを指定
+            model = genai.GenerativeModel("gemini-3.6-flash")
 
             image.thumbnail((800, 800))
             if image.mode in ("RGBA", "P"):
