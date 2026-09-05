@@ -1,7 +1,9 @@
-from io import StringIO
+from io import BytesIO, StringIO
+import json
 import os
 import pandas as pd
 from PIL import Image
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
@@ -39,16 +41,8 @@ with tab2:
     st.image(image, caption="アップロードされた出馬表", use_container_width=True)
 
     if st.button("この画像をAIで解析してCSV化する"):
-      # 画面が固まるのを防ぐため、シンプルな st.spinner のみを使用
       with st.spinner("AIが画像から出馬表を解析しています..."):
         try:
-          import google.generativeai as genai
-
-          # 画像を小さく安全なサイズにする
-          image.thumbnail((800, 800))
-          if image.mode in ("RGBA", "P"):
-            image = image.convert("RGB")
-
           api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get(
               "GOOGLE_API_KEY"
           )
@@ -58,8 +52,18 @@ with tab2:
                 "エラー: APIキー（GOOGLE_API_KEY）が設定されていません。"
             )
           else:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            # 画像の軽量化とBase64エンコード準備
+            image.thumbnail((800, 800))
+            if image.mode in ("RGBA", "P"):
+              image = image.convert("RGB")
+
+            img_byte_arr = BytesIO()
+            image.save(img_byte_arr, format="JPEG", quality=80)
+            import base64
+
+            encoded_image = base64.b64encode(img_byte_arr.getvalue()).decode(
+                "utf-8"
+            )
 
             prompt = (
                 "添付された競馬の出馬表画像から、すべての馬について「馬番」「馬名」「単勝オッズ」を読み取ってください。"
@@ -67,27 +71,59 @@ with tab2:
                 "余計な解説文やマークダウンのバッククォート（```csv など）は一切含めず、純粋なCSVテキストだけを返してください。"
             )
 
-            # 確実に処理を流すためシンプルな呼び出しに戻す
-            response = model.generate_content([image, prompt])
+            # Gemini REST APIのエンドポイント
+            url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){api_key}"
 
-            if response and response.text:
-              csv_text = response.text.strip()
-              csv_text = csv_text.replace("```csv", "").replace("```", "").strip()
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "image/jpeg",
+                                    "data": encoded_image,
+                                }
+                            },
+                            {"text": prompt},
+                        ]
+                    }
+                ]
+            }
 
-              df_result = pd.read_csv(StringIO(csv_text))
+            # 直接HTTPリクエスト（15秒でタイムアウト設定）
+            response = requests.post(
+                url, headers={"Content-Type": "application/json"}, json=payload, timeout=15
+            )
 
-              st.success("解析が完了しました！")
-              st.dataframe(df_result)
-
-              st.write(
-                  "👇 以下のテキストをコピーして「レースシミュレーション」タブの入力欄に貼り付けてください"
+            if response.status_code == 200:
+              result_json = response.json()
+              csv_text = (
+                  result_json.get("candidates", [{}])[0]
+                  .get("content", {})
+                  .get("parts", [{}])[0]
+                  .get("text", "")
+                  .strip()
               )
-              st.text_area(
-                  "変換されたCSVデータ", csv_text, key="converted_csv_area"
+              csv_text = (
+                  csv_text.replace("```csv", "").replace("```", "").strip()
               )
+
+              if csv_text:
+                df_result = pd.read_csv(StringIO(csv_text))
+                st.success("解析が完了しました！")
+                st.dataframe(df_result)
+
+                st.write(
+                    "👇 以下のテキストをコピーして「レースシミュレーション」タブの入力欄に貼り付けてください"
+                )
+                st.text_area(
+                    "変換されたCSVデータ", csv_text, key="converted_csv_area"
+                )
+              else:
+                st.error("AIからの応答が空でした。")
             else:
               st.error(
-                  "AIから有効な応答が返りませんでした。画像を変えて再度お試しください。"
+                  f"APIエラー (ステータスコード: {response.status_code}): {response.text}"
               )
 
         except Exception as e:
