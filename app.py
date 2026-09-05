@@ -1,4 +1,4 @@
-from io import BytesIO, StringIO
+from io import StringIO
 import os
 import pandas as pd
 from PIL import Image
@@ -39,12 +39,14 @@ with tab2:
     st.image(image, caption="アップロードされた出馬表", use_container_width=True)
 
     if st.button("この画像をAIで解析してCSV化する"):
-      # スピナーを使わず、画面に文字で進捗を表示する
       status_area = st.empty()
-      status_area.info("ステップ1: 画像を軽量化しています...")
+      status_area.info("ステップ1: 画像を準備しています...")
 
       try:
-        image.thumbnail((800, 800))
+        # 画像のサイズを適度に縮小して軽量化
+        image.thumbnail((1000, 1000))
+        if image.mode in ("RGBA", "P"):
+          image = image.convert("RGB")
 
         status_area.info("ステップ2: Google AIライブラリを準備しています...")
         import google.generativeai as genai
@@ -60,15 +62,8 @@ with tab2:
         else:
           status_area.info("ステップ3: APIキーを設定し、モデルを呼び出します...")
           genai.configure(api_key=api_key)
-          model = genai.GenerativeModel("gemini-2.0-flash")
-
-          img_byte_arr = BytesIO()
-          if image.mode in ("RGBA", "P"):
-            image = image.convert("RGB")
-          image.save(img_byte_arr, format="JPEG", quality=80)
-          image_bytes = img_byte_arr.getvalue()
-
-          image_part = {"mime_type": "image/jpeg", "data": image_bytes}
+          # 安定性の高いモデルに変更
+          model = genai.GenerativeModel("gemini-1.5-flash")
 
           prompt = (
               "添付された競馬の出馬表画像から、すべての馬について「馬番」「馬名」「単勝オッズ」を読み取ってください。"
@@ -79,7 +74,8 @@ with tab2:
           status_area.info(
               "ステップ4: AIに画像を送信して解析中...（数秒かかります）"
           )
-          response = model.generate_content([image_part, prompt])
+          # PILイメージをそのまま渡す方式に変更
+          response = model.generate_content([image, prompt])
 
           status_area.info("ステップ5: 解析結果を処理しています...")
           csv_text = response.text.strip()
