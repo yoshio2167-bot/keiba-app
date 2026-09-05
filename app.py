@@ -42,6 +42,14 @@ if 'history' not in st.session_state:
 st.sidebar.header("⚙️ 設定")
 num_races = st.sidebar.slider("レース数", min_value=1, max_value=5, value=3)
 
+# 季節自動判定関数
+def get_season(dt):
+    m = dt.month
+    if 3 <= m <= 5: return "🌸春競馬"
+    elif 6 <= m <= 9: return "☀️夏競馬"
+    elif 10 <= m <= 11: return "🍁秋競馬"
+    else: return "❄️冬競馬"
+
 race_tabs = st.tabs([f"第{i+1}R" for i in range(num_races)])
 
 race_configs = []
@@ -112,10 +120,13 @@ for i, tab in enumerate(race_tabs):
 
         r_title = f"{r_loc}{r_num} ({r_class})"
         r_cond_str = f"{r_surface}{r_dist} ({r_cond}・{r_pace}ペース)"
+        
+        target_date = date(2026, 9, 5)
 
         race_configs.append({
             'index': i+1,
-            'date': date(2026, 9, 5).strftime('%Y/%m/%d'),
+            'date': target_date,
+            'season': get_season(target_date),
             'title': r_title,
             'condition': r_cond_str,
             'pace': r_pace,
@@ -215,7 +226,6 @@ if st.button("🚀 一括シミュレーション実行", type="primary", use_co
 
             sim_df = pd.DataFrame(sim_list).sort_values(by='勝回', ascending=False).reset_index(drop=True)
             
-            # 3連複5点買い目の自動算出
             top_horses = sim_df.head(5)
             trio_bets = []
             if len(top_horses) >= 4:
@@ -235,7 +245,8 @@ if st.button("🚀 一括シミュレーション実行", type="primary", use_co
             sim_df = sim_df.set_index('馬番')
 
             batch_results.append({
-                '日付': rc['date'],
+                'シーズン': rc['season'],
+                '日付': rc['date'].strftime('%Y/%m/%d'),
                 'レース': rc['title'],
                 '開催情報': rc['condition'],
                 '結果df': sim_df,
@@ -258,7 +269,10 @@ if st.session_state['history']:
         st.rerun()
 
     for idx, item in enumerate(st.session_state['history']):
-        with st.expander(f"#{idx+1} {item['レース']} ({item['開催情報']})", expanded=(idx==len(st.session_state['history'])-1)):
+        season_tag = item.get('シーズン', '')
+        expander_title = f"[{season_tag}] #{idx+1} {item['レース']} ({item['開催情報']})"
+        
+        with st.expander(expander_title, expanded=(idx==len(st.session_state['history'])-1)):
             row_count = len(item['結果df'])
             calc_height = row_count * 35 + 38
             
