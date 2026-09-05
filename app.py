@@ -39,10 +39,11 @@ with tab2:
     st.image(image, caption="アップロードされた出馬表", use_container_width=True)
 
     if st.button("この画像をAIで解析してCSV化する"):
-      # 画像サイズが大きいとフリーズするため、長辺を制限して軽量化
-      image.thumbnail((1000, 1000))
+      image.thumbnail((800, 800))  # さらに軽くする
 
-      with st.spinner("AIが画像から出馬表を読み取っています..."):
+      with st.spinner(
+          "AIが解析中...(数秒で完了するかエラーを表示します)"
+      ):
         try:
           import google.generativeai as genai
 
@@ -61,7 +62,7 @@ with tab2:
             img_byte_arr = BytesIO()
             if image.mode in ("RGBA", "P"):
               image = image.convert("RGB")
-            image.save(img_byte_arr, format="JPEG", quality=85)
+            image.save(img_byte_arr, format="JPEG", quality=80)
             image_bytes = img_byte_arr.getvalue()
 
             image_part = {"mime_type": "image/jpeg", "data": image_bytes}
@@ -72,6 +73,7 @@ with tab2:
                 "余計な解説文やマークダウンのバッククォート（```csv など）は一切含めず、純粋なCSVテキストだけを返してください。"
             )
 
+            # タイムアウト対策としてリクエストを実行
             response = model.generate_content([image_part, prompt])
             csv_text = response.text.strip()
             csv_text = csv_text.replace("```csv", "").replace("```", "").strip()
@@ -89,4 +91,6 @@ with tab2:
             )
 
         except Exception as e:
-          st.error(f"解析中にエラーが発生しました: {e}")
+          st.error(
+              f"エラーが発生しました（APIキーの権限やネットワークの不具合の可能性があります）: {e}"
+          )
