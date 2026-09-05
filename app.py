@@ -13,7 +13,7 @@ tab1, tab2 = st.tabs(["レースシミュレーション", "スクショから�
 with tab1:
   st.header("レースシミュレーション実行")
   st.write(
-      "スクショから変換したCSVデータを貼り付けると、AIが能力・上がり3F・オッズを総合評価して推奨順位を算出します。"
+      "出馬表のCSVデータを貼り付けるか、右側のタブでスクショから変換したデータを読み込んでシミュレーションを実行します。"
   )
 
   pasted_data = st.text_area(
@@ -33,16 +33,13 @@ with tab1:
       )
       st.dataframe(df_input, use_container_width=True)
     except Exception as e:
-      st.info(
-          "CSVデータを貼り付けるとここにプレビューが表示されます。"
-      )
+      st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
   if st.button("🚀 推奨シミュレーションを実行"):
     if df_input is not None and not df_input.empty:
       with st.spinner("スピード指数と上がり3Fを元に総合評価を計算中..."):
         df_res = df_input.copy()
 
-        # 数値データの型変換（欠損値や文字列混入対策）
         df_res["スピード指数_num"] = pd.to_numeric(
             df_res["スピード指数"], errors="coerce"
         ).fillna(50)
@@ -53,30 +50,20 @@ with tab1:
             df_res["単勝オッズ"], errors="coerce"
         ).fillna(10.0)
 
-        # おすすめ総合スコア計算式:
-        # スピード指数が高く、かつ上がり3Fのタイムが若い（速い）ほど高得点
-        # 上がり3Fは数値が小さいほど良いので、基準値（37.0）から引いた数値をプラス評価にする
         df_res["AI総合評価スコア"] = (
             df_res["スピード指数_num"] * 0.7
             + (37.0 - df_res["上がり3F_num"]) * 5.0
         ).round(1)
 
-        # 期待値スコア（能力スコア ÷ オッズ で「オッズ妙味のある穴馬」を浮き上がらせる）
         df_res["AI妙味期待値"] = (
             df_res["AI総合評価スコア"] / df_res["オッズ_num"]
         ).round(1)
 
-        # スコア順に並び替え
         df_ranked = df_res.sort_values(
             by="AI総合評価スコア", ascending=False
         ).reset_index(drop=True)
 
         st.subheader("📊 AIシミュレーション・総合評価ランキング")
-        st.write(
-            "※「AI総合評価スコア」が高いほど能力上位、「AI妙味期待値」が高いほどオッズ妙味がある（穴でおすすめ）馬です。"
-        )
-
-        # 表示する列を整理
         display_cols = [
             "馬番",
             "馬名",
@@ -95,7 +82,6 @@ with tab1:
 
         st.dataframe(df_ranked[available_cols], use_container_width=True)
 
-        # 推奨買い目の自動提案
         st.subheader("🎯 おすすめAI買い目インフォ")
         top_horse = df_ranked.iloc[0]["馬名"]
         top_num = df_ranked.iloc[0]["馬番"]
@@ -118,22 +104,31 @@ with tab1:
       )
 
 with tab2:
-  st.header("出馬表スクショからのデータ自動変換")
+  st.header("出馬表スクショからのデータ自動変換（複数枚対応）")
   st.write(
-      "スマホで撮影した出馬表のスクリーンショットをアップロードすると、AIが「馬番」「馬名」「人気」「オッズ」「脚質」「上がり3F」「スピード指数」「近走5走成績」「騎手」「斤量」をすべて抽出します。"
+      "スマホで撮影した出馬表のスクリーンショットを**複数枚同時に選択して**アップロードできます。AIがすべての画像を読み込んで1つのCSVに統合します。"
   )
 
-  uploaded_file = st.file_uploader(
-      "出馬表のスクリーンショットを選択", type=["jpg", "jpeg", "png"]
+  # accept_multiple_files=True で複数選択が可能に
+  uploaded_files = st.file_uploader(
+      "出馬表のスクリーンショットを選択（複数選択可）",
+      type=["jpg", "jpeg", "png"],
+      accept_multiple_files=True,
   )
 
-  if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="アップロードされた出馬表", use_container_width=True)
+  if uploaded_files:
+    st.write(f"📁 選択された画像: {len(cols := uploaded_files) and len(uploaded_files)} 枚")
 
-    if st.button("この画像をAIで詳細解析してCSV化する"):
+    # プレビュー表示
+    cols = st.columns(min(len(uploaded_files), 3))
+    for idx, file in enumerate(uploaded_files):
+      with cols[idx % len(cols)]:
+        img_preview = Image.open(file)
+        st.image(img_preview, caption=f"画像 {idx+1}", use_container_width=True)
+
+    if st.button("選択したすべての画像をAIで詳細解析してCSV化する"):
       with st.spinner(
-          "AIが画像から出馬表の詳細データ（脚質・上がり3F・5走分など）を抽出中..."
+          "AIが複数の画像から出馬表データをまとめて抽出・統合中..."
       ):
         try:
           import google.generativeai as genai
@@ -150,12 +145,17 @@ with tab2:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-3.6-flash")
 
-            image.thumbnail((1200, 1200))
-            if image.mode in ("RGBA", "P"):
-              image = image.convert("RGB")
+            # 複数画像をPILのリスト形式に変換
+            pil_images = []
+            for file in uploaded_files:
+              img = Image.open(file)
+              img.thumbnail((1200, 1200))
+              if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+              pil_images.append(img)
 
             prompt = (
-                "添付された競馬の出馬表画像から、掲載されているすべての馬について以下の項目を漏れなく読み取ってください:\n"
+                "添付された複数の競馬の出馬表画像から、掲載されているすべての馬について以下の項目を漏れなく読み取ってください:\n"
                 "1. 馬番\n"
                 "2. 馬名\n"
                 "3. 人気（何番人気か。数字のみ）\n"
@@ -166,11 +166,13 @@ with tab2:
                 "8. 近走5走成績（直近5走の着順や着差などの戦績データ。例: 1-2-1-3-5 など）\n"
                 "9. 騎手名\n"
                 "10. 斤量\n\n"
-                "出力は必ずPythonのpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量）のみを出力してください。"
+                "重複がないようにすべての馬を整理し、出力は必ずPythonのpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量）のみを出力してください。"
                 "余計な解説文やマークダウンのバッククォート（```csv など）は一切含めず、純粋なCSVテキストだけを返してください。"
             )
 
-            response = model.generate_content([image, prompt])
+            # 画像のリストとプロンプトを同時に送信
+            content_list = pil_images + [prompt]
+            response = model.generate_content(content_list)
 
             if response and response.text:
               csv_text = response.text.strip()
@@ -178,7 +180,7 @@ with tab2:
 
               df_result = pd.read_csv(StringIO(csv_text))
 
-              st.success("詳細解析が完了しました！")
+              st.success("複数画像の詳細解析・統合が完了しました！")
               st.dataframe(df_result, use_container_width=True)
 
               st.subheader("📋 変換されたCSVデータ")
