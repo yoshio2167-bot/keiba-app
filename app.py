@@ -108,7 +108,7 @@ with tab1:
       )
 
 with tab2:
-  st.header("出馬表スクショからのデータ自動変換（制限対策版）")
+  st.header("出馬表スクショからのデータ自動変換")
   st.write(
       "スマホで撮影した出馬表のスクリーンショット（複数可）をアップロードすると、AIが「競馬場・距離・馬場・天候・クラス」などのレース条件と、各馬の詳細データを一括抽出します。"
   )
@@ -143,7 +143,8 @@ with tab2:
             )
           else:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-3.6-flash")
+            # 制限にひっかかりにくい安定モデル gemini-1.5-flash を使用
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
             pil_images = []
             for file in uploaded_files:
@@ -176,7 +177,6 @@ with tab2:
 
             content_list = pil_images + [prompt]
 
-            # 429エラー（制限）対策の自動リトライ処理
             response = None
             max_retries = 3
             for attempt in range(max_retries):
@@ -185,7 +185,7 @@ with tab2:
                 break
               except Exception as err:
                 if "429" in str(err) and attempt < max_retries - 1:
-                  time.sleep(30)  # 30秒待ってから再トライ
+                  time.sleep(20)
                   continue
                 else:
                   raise err
@@ -217,5 +217,5 @@ with tab2:
 
         except Exception as e:
           st.error(
-              f"解析中にエラーが発生しました（無料枠の上限に達した可能性もあります）: {e}"
+              f"解析中にエラーが発生しました（無料枠の上限を超えた場合は少し時間を置いてください）: {e}"
           )
