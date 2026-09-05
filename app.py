@@ -8,14 +8,12 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ スクショ解析ツール")
 
-# --- タブによる機能の切り替え ---
 tab1, tab2 = st.tabs(["レースシミュレーション", "スクショからデータ化"])
 
 with tab1:
   st.header("レースシミュレーション実行")
   st.write("下の入力欄にCSVデータを貼り付けるか、右側のタブでスクショから変換してください。")
 
-  # 従来のテキスト入力・ペースト欄
   pasted_data = st.text_area(
       "ペースト #1 (CSVデータを貼り付け)",
       placeholder="馬番,馬名,単勝オッズ...\n1,サンプルホースA,4.5",
@@ -51,11 +49,8 @@ with tab2:
     if st.button("この画像をAIで解析してCSV化する"):
       with st.spinner("AIが画像から出馬表を読み取っています..."):
         try:
-          # google-genai を用いた画像解析の実装
-          from google import genai
-          from google.genai import types
+          import google.generativeai as genai
 
-          # StreamlitのSecrets等からAPIキーを取得（または環境変数）
           api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get(
               "GOOGLE_API_KEY"
           )
@@ -65,23 +60,19 @@ with tab2:
                 "APIキー（GOOGLE_API_KEY）が設定されていません。StreamlitのSecretsに設定してください。"
             )
           else:
-            client = genai.Client(api_key=api_key)
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
             prompt = (
                 "添付された競馬の出馬表画像から、すべての馬について「馬番」「馬名」「単勝オッズ」を読み取ってください。"
-                "出力は必ずPythonでpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,単勝オッズ）のみを出力してください。"
+                "出力は必ずPythonのpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,単勝オッズ）のみを出力してください。"
                 "余計な解説文やマークダウンのバッククォート（```csv など）は含めず、純粋なCSVテキストだけを返してください。"
             )
 
-            response = client.models.generate_content(
-                model="gemini-2.5-flash", contents=[image, prompt]
-            )
-
+            response = model.generate_content([image, prompt])
             csv_text = response.text.strip()
-            # バッククォートなどが含まれていた場合の保険のクリーニング
             csv_text = csv_text.replace("```csv", "").replace("```", "").strip()
 
-            # CSVとして正しく読み込めるかテスト
             df_result = pd.read_csv(StringIO(csv_text))
 
             st.success("解析が完了しました！")
