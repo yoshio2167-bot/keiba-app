@@ -61,7 +61,8 @@ with tab2:
             )
           else:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            # 修正: モデル名を正しく動作する gemini-2.0-flash に指定
+            model = genai.GenerativeModel("gemini-2.0-flash")
 
             prompt = (
                 "添付された競馬の出馬表画像から、すべての馬について「馬番」「馬名」「単勝オッズ」を読み取ってください。"
