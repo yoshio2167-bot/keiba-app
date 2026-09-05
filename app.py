@@ -13,7 +13,7 @@ tab1, tab2 = st.tabs(["レースシミュレーション", "スクショから�
 with tab1:
   st.header("レースシミュレーション実行")
   st.write(
-      "出馬表のCSVデータを貼り付けるか、右側のタブでスクショから変換したデータを読み込んでシミュレーションを実行します。"
+      "スクショから変換したCSVデータを貼り付けると、AIが能力・上がり3F・オッズを総合評価して推奨順位を算出します。"
   )
 
   pasted_data = st.text_area(
@@ -34,25 +34,87 @@ with tab1:
       st.dataframe(df_input, use_container_width=True)
     except Exception as e:
       st.info(
-          "CSVデータを貼り付けるとここにプレビューが表示されます。（ヘッダーとカンマ区切りを確認してください）"
+          "CSVデータを貼り付けるとここにプレビューが表示されます。"
       )
 
-  if st.button("🚀 レースシミュレーションを実行"):
+  if st.button("🚀 推奨シミュレーションを実行"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("レース展開および勝率をシミュレーション中..."):
-        st.subheader("📊 シミュレーション結果")
-        df_result = df_input.copy()
-        if "単勝オッズ" in df_result.columns:
-          df_result["AI期待値スコア"] = (
-              100 / pd.to_numeric(df_result["単勝オッズ"], errors="coerce")
-          ).round(1)
-        st.dataframe(
-            df_result.sort_values(by="AI期待値スコア", ascending=False),
-            use_container_width=True,
+      with st.spinner("スピード指数と上がり3Fを元に総合評価を計算中..."):
+        df_res = df_input.copy()
+
+        # 数値データの型変換（欠損値や文字列混入対策）
+        df_res["スピード指数_num"] = pd.to_numeric(
+            df_res["スピード指数"], errors="coerce"
+        ).fillna(50)
+        df_res["上がり3F_num"] = pd.to_numeric(
+            df_res["上がり3F"], errors="coerce"
+        ).fillna(35.0)
+        df_res["オッズ_num"] = pd.to_numeric(
+            df_res["単勝オッズ"], errors="coerce"
+        ).fillna(10.0)
+
+        # おすすめ総合スコア計算式:
+        # スピード指数が高く、かつ上がり3Fのタイムが若い（速い）ほど高得点
+        # 上がり3Fは数値が小さいほど良いので、基準値（37.0）から引いた数値をプラス評価にする
+        df_res["AI総合評価スコア"] = (
+            df_res["スピード指数_num"] * 0.7
+            + (37.0 - df_res["上がり3F_num"]) * 5.0
+        ).round(1)
+
+        # 期待値スコア（能力スコア ÷ オッズ で「オッズ妙味のある穴馬」を浮き上がらせる）
+        df_res["AI妙味期待値"] = (
+            df_res["AI総合評価スコア"] / df_res["オッズ_num"]
+        ).round(1)
+
+        # スコア順に並び替え
+        df_ranked = df_res.sort_values(
+            by="AI総合評価スコア", ascending=False
+        ).reset_index(drop=True)
+
+        st.subheader("📊 AIシミュレーション・総合評価ランキング")
+        st.write(
+            "※「AI総合評価スコア」が高いほど能力上位、「AI妙味期待値」が高いほどオッズ妙味がある（穴でおすすめ）馬です。"
+        )
+
+        # 表示する列を整理
+        display_cols = [
+            "馬番",
+            "馬名",
+            "人気",
+            "単勝オッズ",
+            "脚質",
+            "AI総合評価スコア",
+            "AI妙味期待値",
+            "上がり3F",
+            "スピード指数",
+            "騎手",
+        ]
+        available_cols = [
+            c for c in display_cols if c in df_ranked.columns
+        ]
+
+        st.dataframe(df_ranked[available_cols], use_container_width=True)
+
+        # 推奨買い目の自動提案
+        st.subheader("🎯 おすすめAI買い目インフォ")
+        top_horse = df_ranked.iloc[0]["馬名"]
+        top_num = df_ranked.iloc[0]["馬番"]
+        value_horse = (
+            df_ranked.sort_values(by="AI妙味期待値", ascending=False)
+            .iloc[0]["馬名"]
+        )
+        value_num = (
+            df_ranked.sort_values(by="AI妙味期待値", ascending=False)
+            .iloc[0]["馬番"]
+        )
+
+        st.info(
+            f"◎ **本命推し (能力最上位)**: {top_num}番 {top_horse}\n\n"
+            f"★ **穴推奨 (妙味期待値高)**: {value_num}番 {value_horse}"
         )
     else:
       st.warning(
-          "有効なデータが入力されていません。CSVデータを入力するか、スクショ解析タブからデータを読み込んでください。"
+          "データが入力されていません。CSVを貼り付けるか、スクショ解析からデータを読み込んでください。"
       )
 
 with tab2:
@@ -127,7 +189,6 @@ with tab2:
                   height=150,
               )
 
-              # ワンクリックコピー用ボタン（Streamlitのネイティブ機能）
               st.code(csv_text, language="csv")
               st.caption(
                   "↑ 上記のコードブロック右上にあるコピーアイコン（📋）をクリックすると、ワンクリックでクリップボードにコピーできます！"
