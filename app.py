@@ -1,5 +1,6 @@
 from io import StringIO
 import os
+import time
 import pandas as pd
 from PIL import Image
 import streamlit as st
@@ -107,7 +108,7 @@ with tab1:
       )
 
 with tab2:
-  st.header("出馬表スクショからのデータ自動変換（条件自動抽出対応）")
+  st.header("出馬表スクショからのデータ自動変換（制限対策版）")
   st.write(
       "スマホで撮影した出馬表のスクリーンショット（複数可）をアップロードすると、AIが「競馬場・距離・馬場・天候・クラス」などのレース条件と、各馬の詳細データを一括抽出します。"
   )
@@ -174,7 +175,20 @@ with tab2:
             )
 
             content_list = pil_images + [prompt]
-            response = model.generate_content(content_list)
+
+            # 429エラー（制限）対策の自動リトライ処理
+            response = None
+            max_retries = 3
+            for attempt in range(max_retries):
+              try:
+                response = model.generate_content(content_list)
+                break
+              except Exception as err:
+                if "429" in str(err) and attempt < max_retries - 1:
+                  time.sleep(30)  # 30秒待ってから再トライ
+                  continue
+                else:
+                  raise err
 
             if response and response.text:
               csv_text = response.text.strip()
@@ -202,4 +216,6 @@ with tab2:
               st.error("AIから応答がありませんでした。")
 
         except Exception as e:
-          st.error(f"解析中にエラーが発生しました: {e}")
+          st.error(
+              f"解析中にエラーが発生しました（無料枠の上限に達した可能性もあります）: {e}"
+          )
