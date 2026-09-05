@@ -1,3 +1,4 @@
+from io import StringIO
 import pandas as pd
 from PIL import Image
 import streamlit as st
@@ -22,8 +23,6 @@ with tab1:
   if pasted_data:
     try:
       # 簡易的なCSV読み込みテスト
-      from io import StringIO
-
       df_input = pd.read_csv(StringIO(pasted_data))
       st.success("データを正常に読み込みました！")
       st.dataframe(df_input)
@@ -49,14 +48,11 @@ with tab2:
 
   if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption="アップロードされた出馬表", use_column_width=True)
+    # 修正箇所: use_column_width を use_container_width に変更
+    st.image(image, caption="アップロードされた出馬表", use_container_width=True)
 
     if st.button("この画像を解析してCSV化する"):
       with st.spinner("画像を解析中...少々お待ちください"):
-        # --- 画像解析処理（実際のOCR・Vision AI連携部分） ---
-        # ※ここにAPI連携を入れることで、画像から実データを抽出できます。
-        # ここではサンプルとして自動生成されたCSVを表示します。
-
         sample_parsed_data = {
             "馬番": [1, 2, 3, 4, 5],
             "馬名": [
