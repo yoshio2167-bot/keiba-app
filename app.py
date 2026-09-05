@@ -43,13 +43,12 @@ with tab2:
       status_area.info("ステップ1: 画像を準備しています...")
 
       try:
-        # 画像のサイズを適度に縮小して軽量化
-        image.thumbnail((1000, 1000))
+        import concurrent.futures
+        import google.generativeai as genai
+
+        image.thumbnail((800, 800))
         if image.mode in ("RGBA", "P"):
           image = image.convert("RGB")
-
-        status_area.info("ステップ2: Google AIライブラリを準備しています...")
-        import google.generativeai as genai
 
         api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get(
             "GOOGLE_API_KEY"
@@ -60,9 +59,7 @@ with tab2:
               "エラー: APIキー（GOOGLE_API_KEY）が設定されていません。"
           )
         else:
-          status_area.info("ステップ3: APIキーを設定し、モデルを呼び出します...")
           genai.configure(api_key=api_key)
-          # 安定性の高いモデルに変更
           model = genai.GenerativeModel("gemini-1.5-flash")
 
           prompt = (
@@ -72,10 +69,23 @@ with tab2:
           )
 
           status_area.info(
-              "ステップ4: AIに画像を送信して解析中...（数秒かかります）"
+              "ステップ4: AIに画像を送信して解析中...（最大15秒でタイムアウトします）"
           )
-          # PILイメージをそのまま渡す方式に変更
-          response = model.generate_content([image, prompt])
+
+          # --- 15秒で強制的にタイムアウトさせる処理 ---
+          def call_gemini():
+            return model.generate_content([image, prompt])
+
+          with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(call_gemini)
+            try:
+              response = future.result(
+                  timeout=15
+              )  # 15秒で切る
+            except concurrent.futures.TimeoutError:
+              raise Exception(
+                  "AIからの応答が時間切れ（タイムアウト）になりました。APIキーの制限やネットワーク環境をご確認ください。"
+              )
 
           status_area.info("ステップ5: 解析結果を処理しています...")
           csv_text = response.text.strip()
