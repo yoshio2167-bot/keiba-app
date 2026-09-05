@@ -19,7 +19,7 @@ with tab1:
   pasted_data = st.text_area(
       "CSVデータ入力欄",
       placeholder=(
-          "馬番,馬名,人気,単勝オッズ,騎手,斤量\n1,サンプルホースA,1,4.5,川田将雅,56.0"
+          "馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n1,サンプルホースA,1,4.5,先行,33.8,85,1-2-1-3,川田将雅,56.0"
       ),
       height=150,
   )
@@ -33,24 +33,19 @@ with tab1:
       )
       st.dataframe(df_input, use_container_width=True)
     except Exception as e:
-      st.error(
-          f"CSVの読み込み形式にエラーがあります（ヘッダーとカンマ区切りを確認してください）: {e}"
+      st.info(
+          "CSVデータを貼り付けるとここにプレビューが表示されます。（ヘッダーとカンマ区切りを確認してください）"
       )
 
   if st.button("🚀 レースシミュレーションを実行"):
     if df_input is not None and not df_input.empty:
       with st.spinner("レース展開および勝率をシミュレーション中..."):
-        # シミュレーション処理のプレースホルダー（必要に応じてお手元のロジックに置き換え可能です）
         st.subheader("📊 シミュレーション結果")
-        st.write(
-            "オッズや能力指数に基づいた予測勝率・推奨買い目の算出完了しました。"
-        )
-
-        # サンプルの計算結果表示
         df_result = df_input.copy()
-        df_result["AI期待値スコア"] = (
-            100 / pd.to_numeric(df_result["単勝オッズ"], errors="coerce")
-        ).round(1)
+        if "単勝オッズ" in df_result.columns:
+          df_result["AI期待値スコア"] = (
+              100 / pd.to_numeric(df_result["単勝オッズ"], errors="coerce")
+          ).round(1)
         st.dataframe(
             df_result.sort_values(by="AI期待値スコア", ascending=False),
             use_container_width=True,
@@ -63,7 +58,7 @@ with tab1:
 with tab2:
   st.header("出馬表スクショからのデータ自動変換")
   st.write(
-      "スマホで撮影した出馬表のスクリーンショットをアップロードすると、AIが「馬番」「馬名」「人気」「単勝オッズ」「騎手」「斤量」などの詳細データを一括でCSV化します。"
+      "スマホで撮影した出馬表のスクリーンショットをアップロードすると、AIが「馬番」「馬名」「人気」「オッズ」「脚質」「上がり3F」「スピード指数」「近走5走成績」「騎手」「斤量」をすべて抽出します。"
   )
 
   uploaded_file = st.file_uploader(
@@ -76,7 +71,7 @@ with tab2:
 
     if st.button("この画像をAIで詳細解析してCSV化する"):
       with st.spinner(
-          "AIが画像から出馬表の詳細データを抽出しています..."
+          "AIが画像から出馬表の詳細データ（脚質・上がり3F・5走分など）を抽出中..."
       ):
         try:
           import google.generativeai as genai
@@ -93,14 +88,23 @@ with tab2:
             genai.configure(api_key=api_key)
             model = genai.GenerativeModel("gemini-3.6-flash")
 
-            image.thumbnail((1000, 1000))
+            image.thumbnail((1200, 1200))
             if image.mode in ("RGBA", "P"):
               image = image.convert("RGB")
 
             prompt = (
-                "添付された競馬の出馬表画像から、掲載されているすべての馬について以下の項目を読み取ってください:\n"
-                "1. 馬番\n2. 馬名\n3. 人気（何番人気か。例: 1, 2など数字のみ、または記載がなければ空欄）\n4. 単勝オッズ（数値のみ。例: 4.5）\n5. 騎手名\n6. 斤量（例: 55.0）\n\n"
-                "出力は必ずPythonのpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,人気,単勝オッズ,騎手,斤量）のみを出力してください。"
+                "添付された競馬の出馬表画像から、掲載されているすべての馬について以下の項目を漏れなく読み取ってください:\n"
+                "1. 馬番\n"
+                "2. 馬名\n"
+                "3. 人気（何番人気か。数字のみ）\n"
+                "4. 単勝オッズ（数値のみ）\n"
+                "5. 脚質（逃げ、先行、差し、追込など）\n"
+                "6. 上がり3F（直近または平均の上がり3ハロンのタイム。例: 34.5など）\n"
+                "7. スピード指数（記載があれば数値。なければ空欄または推定値）\n"
+                "8. 近走5走成績（直近5走の着順や着差などの戦績データ。例: 1-2-1-3-5 など）\n"
+                "9. 騎手名\n"
+                "10. 斤量\n\n"
+                "出力は必ずPythonのpandas.read_csvで読み込めるCSV形式（ヘッダー: 馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量）のみを出力してください。"
                 "余計な解説文やマークダウンのバッククォート（```csv など）は一切含めず、純粋なCSVテキストだけを返してください。"
             )
 
@@ -115,15 +119,20 @@ with tab2:
               st.success("詳細解析が完了しました！")
               st.dataframe(df_result, use_container_width=True)
 
-              st.info(
-                  "👇 以下のテキストボックスの内容をコピーして、「レースシミュレーション」タブの入力欄に貼り付けてシミュレーションを実行してください。"
-              )
+              st.subheader("📋 変換されたCSVデータ")
               st.text_area(
-                  "変換されたCSVデータ（コピー用）",
+                  "コピー用エリア",
                   csv_text,
                   key="converted_csv_area",
                   height=150,
               )
+
+              # ワンクリックコピー用ボタン（Streamlitのネイティブ機能）
+              st.code(csv_text, language="csv")
+              st.caption(
+                  "↑ 上記のコードブロック右上にあるコピーアイコン（📋）をクリックすると、ワンクリックでクリップボードにコピーできます！"
+              )
+
             else:
               st.error("AIから応答がありませんでした。")
 
