@@ -1,4 +1,4 @@
-from io import StringIO
+from io import BytesIO, StringIO
 import os
 import pandas as pd
 from PIL import Image
@@ -61,8 +61,17 @@ with tab2:
             )
           else:
             genai.configure(api_key=api_key)
-            # 修正: モデル名を正しく動作する gemini-2.0-flash に指定
             model = genai.GenerativeModel("gemini-2.0-flash")
+
+            # 画像をJPEGのバイトデータに確実に変換して渡す
+            img_byte_arr = BytesIO()
+            # RGBAなどの場合はRGBに変換
+            if image.mode in ("RGBA", "P"):
+              image = image.convert("RGB")
+            image.save(img_byte_arr, format="JPEG")
+            image_bytes = img_byte_arr.getvalue()
+
+            image_part = {"mime_type": "image/jpeg", "data": image_bytes}
 
             prompt = (
                 "添付された競馬の出馬表画像から、すべての馬について「馬番」「馬名」「単勝オッズ」を読み取ってください。"
@@ -70,7 +79,7 @@ with tab2:
                 "余計な解説文やマークダウンのバッククォート（```csv など）は含めず、純粋なCSVテキストだけを返してください。"
             )
 
-            response = model.generate_content([image, prompt])
+            response = model.generate_content([image_part, prompt])
             csv_text = response.text.strip()
             csv_text = csv_text.replace("```csv", "").replace("```", "").strip()
 
