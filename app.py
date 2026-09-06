@@ -27,7 +27,7 @@ st.title("競馬予想AIシミュレーター ＆ スクショ解析ツール")
 tab1, tab2 = st.tabs(["レースシミュレーション", "スクショからデータ化"])
 
 with tab1:
-  st.header("レースシミュレーション実行")
+  st.header("レースシミュレーション実行 ＆ 記録保存")
   st.write(
       "出馬表のCSVデータを貼り付けるか、右側のタブでスクショから変換したデータを読み込んでシミュレーションを実行します。"
   )
@@ -99,7 +99,17 @@ with tab1:
             c for c in display_cols if c in df_ranked.columns
         ]
 
-        st.dataframe(df_ranked[available_cols], use_container_width=True)
+        df_display = df_ranked[available_cols]
+        st.dataframe(df_display, use_container_width=True)
+
+        # 📥 【記録用】シミュレーション結果をCSVとしてダウンロードするボタンを追加
+        csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            label="📥 このシミュレーション結果をCSVで保存（記録する）",
+            data=csv_download_data,
+            file_name="keiba_simulation_result.csv",
+            mime="text/csv",
+        )
 
         st.subheader("🎯 おすすめAI買い目インフォ")
         top_horse = df_ranked.iloc[0]["馬名"]
@@ -192,7 +202,6 @@ with tab2:
               try:
                 if USE_LEGACY_GENAI:
                   genai.configure(api_key=api_key)
-                  # 新しいAPIキーに対応している最新モデルを指定
                   model = genai.GenerativeModel("gemini-3.6-flash")
                   response = model.generate_content(content_list)
                 else:
