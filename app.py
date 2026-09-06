@@ -7,7 +7,6 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-# タブの作成
 tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"])
 
 with tab1:
@@ -177,49 +176,90 @@ with tab1:
 with tab2:
   st.header("実際のレース結果との照合・検証")
   st.write(
-      "過去に保存したシミュレーション結果（CSV）と、実際のレース結果（着順データ）を突き合わせて的中状況を検証します。"
+      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの的中状況を検証します。"
   )
 
   uploaded_sim_file = st.file_uploader(
       "1. 保存したシミュレーション結果CSVをアップロード", type=["csv"]
   )
 
-  actual_result_text = st.text_area(
-      "2. 実際のレース結果（上位馬の馬番または馬名）を入力",
-      placeholder=(
-          "例:\n"
-          "1着: 4\n"
-          "2着: 1\n"
-          "3着: 7\n"
-          "（または馬名でも可。上から順に1着、2着、3着を入力してください）"
-      ),
-      height=120,
-  )
-
   if uploaded_sim_file is not None:
     df_saved = pd.read_csv(uploaded_sim_file)
-    st.subheader("📋 読み込んだシミュレーション結果プレビュー")
-    st.dataframe(df_saved, use_container_width=True)
+    st.success("シミュレーション結果を読み込みました！")
 
-    if st.button("🔍 実際の着と比較して検証する"):
-      if not actual_result_text:
-        st.warning("実際のレース結果を入力してください。")
+    # 選択肢用の馬リストを作成（例: "4番: ユウトザイシン"）
+    horse_options = [
+        f"{row.get('馬番')}: {row.get('馬名')}"
+        for _, row in df_saved.iterrows()
+    ]
+
+    st.subheader("2. 実際のレース結果を選択")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+      actual_1st = st.selectbox(
+          "🥇 実際の1着馬", options=["選択してください"] + horse_options
+      )
+    with col2:
+      actual_2nd = st.selectbox(
+          "🥈 実際の2着馬", options=["選択してください"] + horse_options
+      )
+    with col3:
+      actual_3rd = st.selectbox(
+          "🥉 実際の3着馬", options=["選択してください"] + horse_options
+      )
+
+    # 着差（惜しさの評価用）の選択
+    st.subheader("3. 着差・状況の記録（オプション）")
+    margin_option = st.selectbox(
+        "AI本命馬の着差・状況",
+        options=[
+            "選択なし",
+            "1着（的中）",
+            "2着・3着（複勝圏内）",
+            "4着以下（ハナ差・クビ差・クレイジー惜しい）",
+            "4着以下（完敗・見当違い）",
+        ],
+    )
+
+    if st.button("🔍 予想結果を検証・判定する"):
+      if actual_1st == "選択してください":
+        st.warning("実際の1着馬を選択してください。")
       else:
-        st.success("検証処理を実行しました。")
-        # 本命（ランキング1行目）の取得
-        top_pick_row = df_saved.iloc[0]
-        top_num = str(top_pick_row.get("馬番"))
-        top_name = str(top_pick_row.get("馬名"))
-        top_odds = float(top_pick_row.get("単勝オッズ", 0))
+        # AIの本命（ランキング1行目）
+        ai_top_row = df_saved.iloc[0]
+        ai_top_str = f"{ai_top_row.get('馬番')}: {ai_top_row.get('馬名')}"
 
-        st.info(
-            f"**【AIの本命】** 枠番/馬番: {top_num}番 ({top_name}) / 単勝オッズ:"
-            f" {top_odds}倍"
+        st.markdown("---")
+        st.subheader("📝 検証結果レポート")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+          st.info(f"**【AI本命予想】**\n\n◎ {ai_top_str}")
+        with col_b:
+          st.success(
+              f"**【実際の着順】**\n\n1着: {actual_1st}\n2着:"
+              f" {actual_2nd}\n3着: {actual_3rd}"
+          )
+
+        # 的中判定
+        is_win_hit = ai_top_str in actual_1st
+        is_place_hit = (
+            ai_top_str in actual_1st
+            or ai_top_str in actual_2nd
+            or ai_top_str in actual_3rd
         )
-        st.write(
-            "※ 入力された実際の着順テキストと照らし合わせ、的中していたかを確認してください。"
-        )
-        st.text(f"【入力された実際の結果】\n{actual_result_text}")
+
+        if is_win_hit:
+          st.balloons()
+          st.success("🎉 【判定】単勝的中！AIの本命が見事1着となりました！")
+        elif is_place_hit:
+          st.info(
+              "👍 【判定】複勝圏内的中！AIの本命が3着以内に入りました。"
+          )
+        else:
+          st.warning(
+              f"❌ 【判定】不的中。選択された状況（{margin_option}）を元に、次回のパラメータ調整に活かしましょう。"
+          )
   else:
     st.info(
         "まずはTab1で保存したシミュレーション結果のCSVファイルをアップロードしてください。"
