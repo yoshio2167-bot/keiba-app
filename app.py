@@ -19,15 +19,47 @@ with tab1:
       "CSVデータ貼り付け欄",
       placeholder=(
           "開催,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "中山11R,芝1600m(良),1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
+          "阪神,芝1400m(良) 2歳未勝利,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
       ),
       height=180,
+  )
+
+  # レース番号の補助選択
+  race_num_choice = st.selectbox(
+      "📌 開催の横に追加するレース番号を選択してください",
+      options=[
+          "追加しない（CSVのまま）",
+          "1R",
+          "2R",
+          "3R",
+          "4R",
+          "5R",
+          "6R",
+          "7R",
+          "8R",
+          "9R",
+          "10R",
+          "11R",
+          "12R",
+      ],
+      index=11,  # デフォルトで11Rを選択
   )
 
   df_input = None
   if pasted_data:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
+
+      # 「開催」の横にレース番号を自動で繋げる処理
+      if race_num_choice != "追加しない（CSVのまま）" and "開催" in df_input.columns:
+        df_input["開催"] = df_input["開催"].astype(str).apply(
+            lambda x: (
+                f"{x}{race_num_choice}"
+                if not x.endswith(race_num_choice)
+                else x
+            )
+        )
+
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
     except Exception as e:
@@ -127,7 +159,6 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        # レース情報の取得
         kaisai_str = ""
         cond_str = ""
         if "開催" in df_display.columns and not df_display["開催"].empty:
@@ -158,7 +189,6 @@ with tab1:
             mime="text/csv",
         )
 
-        # Tab1用のスプレッドシート一発コピー用テキスト生成（レース情報を先頭に挿入）
         df_copy_prep = df_display.copy()
         race_full_title = f"{kaisai_str} {cond_str}".strip()
         if not race_full_title:
@@ -172,14 +202,10 @@ with tab1:
         st.markdown(
             "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
         )
-        st.write(
-            "先頭にレース名が入っています。下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートに貼り付けてください。"
-        )
         st.text_area(
             "シミュレーション結果コピー用ボックス",
             value=sim_copy_text,
             height=100,
-            help="タップすると自動で全選択されます。",
         )
 
         st.subheader("🎯 おすすめAI買い目インフォ")
@@ -322,14 +348,10 @@ with tab2:
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
-        st.write(
-            "先頭にレース名が入っています。下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートのセルに貼り付けてください。"
-        )
         st.text_area(
             "検証結果コピー用ボックス",
             value=sheet_row_text,
             height=70,
-            help="タップすると自動で全選択されます。",
         )
 
   else:
