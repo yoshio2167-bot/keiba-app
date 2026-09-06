@@ -24,7 +24,7 @@ with tab1:
       height=180,
   )
 
-  # レース番号の補助選択
+  # デフォルトを1R（index=1）に設定
   race_num_choice = st.selectbox(
       "📌 開催の横に追加するレース番号を選択してください",
       options=[
@@ -42,7 +42,7 @@ with tab1:
           "11R",
           "12R",
       ],
-      index=11,  # デフォルトで11Rを選択
+      index=1,  # デフォルトで1Rを選択
   )
 
   df_input = None
@@ -50,12 +50,11 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      # 「開催」の横にレース番号を自動で繋げる処理
       if race_num_choice != "追加しない（CSVのまま）" and "開催" in df_input.columns:
         df_input["開催"] = df_input["開催"].astype(str).apply(
             lambda x: (
                 f"{x}{race_num_choice}"
-                if not x.endswith(race_num_choice)
+                if not any(f"{i}R" in x for i in range(1, 13))
                 else x
             )
         )
