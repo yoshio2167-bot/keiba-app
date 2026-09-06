@@ -9,7 +9,6 @@ st.write(
     "出馬表のスクショは別のチャットでCSV化し、以下の入力欄に貼り付けるだけで、スピード指数計算・総合ランキング・買い目提案・結果保存までを一括で行えます。"
 )
 
-# 入力エリアのみに特化（APIエラーの心配がゼロになります）
 pasted_data = st.text_area(
     "CSVデータ貼り付け欄",
     placeholder=(
@@ -103,12 +102,33 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
       df_display = df_ranked[available_cols]
       st.dataframe(df_display, use_container_width=True)
 
+      # 📥 わかりやすいファイル名（開催・レース条件を反映）を動的に作成
+      file_prefix = "keiba_result"
+      if "開催" in df_display.columns and not df_display["開催"].empty:
+        kaisai_val = str(df_display["開催"].iloc[0]).strip()
+        if kaisai_val and kaisai_val != "nan":
+          file_prefix = kaisai_val
+
+      if "レース条件" in df_display.columns and not df_display["レース条件"].empty:
+        cond_val = str(df_display["レース条件"].iloc[0]).strip()
+        if cond_val and cond_val != "nan":
+          # ファイル名に使えない記号などを安全に置換
+          cond_val = (
+              cond_val.replace("/", "_")
+              .replace("(", "_")
+              .replace(")", "")
+              .replace(" ", "")
+          )
+          file_prefix = f"{file_prefix}_{cond_val}"
+
+      download_file_name = f"{file_prefix}_simulation.csv"
+
       # 📥 記録用CSVダウンロードボタン
       csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
       st.download_button(
           label="📥 このシミュレーション結果をCSVで保存（記録する）",
           data=csv_download_data,
-          file_name="keiba_simulation_result.csv",
+          file_name=download_file_name,
           mime="text/csv",
       )
 
