@@ -1,12 +1,13 @@
+import numpy as np
 from io import StringIO
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
 
-st.title("競馬予想AIシミュレーター ＆ 記録管理ツール")
+st.title("競馬予想AIシミュレーター ＆ モンテカルロ分析ツール")
 st.write(
-    "出馬表のスクショは別のチャットでCSV化し、以下の入力欄に貼り付けるだけで、スピード指数計算・総合ランキング・買い目提案・結果保存までを一括で行えます。"
+    "出馬表CSVを貼り付けると、AIが100回の模擬レース（モンテカルロ・シミュレーション）を実行し、勝率や期待回収率を算出します。"
 )
 
 pasted_data = st.text_area(
@@ -29,12 +30,14 @@ if pasted_data:
         "CSVデータを貼り付けるとここにプレビューが表示されます。（カンマ区切りとヘッダーを確認してください）"
     )
 
-if st.button("🚀 スピード指数算出 ＆ シミュレーション実行"):
+if st.button("🚀 100回シミュレーション＆予想実行"):
   if df_input is not None and not df_input.empty:
-    with st.spinner("スピード指数の自動算出および総合評価を計算中..."):
+    with st.spinner(
+        "100回の模擬レース（モンテカルロ法）を実行・集計中..."
+    ):
       df_res = df_input.copy()
 
-      # 1. 各項目の数値化
+      # 1. 数値化と自動スピード指数算出
       df_res["上がり3F_num"] = pd.to_numeric(
           df_res["上がり3F"], errors="coerce"
       ).fillna(35.0)
@@ -43,7 +46,6 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
       ).fillna(10.0)
 
 
-      # 2. スピード指数の自動計算ロジック
       def calc_speed_index(row):
         try:
           val = float(row["スピード指数"])
@@ -51,37 +53,55 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
             return val
         except:
           pass
-
         base_idx = 70.0
         up_time = row["上がり3F_num"]
         base_idx += (37.0 - up_time) * 4.0
-
         recent = str(row["近走5走成績"])
         wins = recent.count("1")
         base_idx += wins * 3.0
-
         return round(max(50.0, min(100.0, base_idx)), 1)
 
 
       if "スピード指数" not in df_res.columns:
         df_res["スピード指数"] = 0.0
-
       df_res["スピード指数"] = df_res.apply(calc_speed_index, axis=1)
 
-      # 3. 総合評価スコア・妙味期待値の計算
-      df_res["AI総合評価スコア"] = (
+      # 基礎評価スコア
+      df_res["ベース評価"] = (
           df_res["スピード指数"] * 0.7 + (37.0 - df_res["上がり3F_num"]) * 5.0
-      ).round(1)
+      )
 
-      df_res["AI妙味期待値"] = (
-          df_res["AI総合評価スコア"] / df_res["オッズ_num"]
-      ).round(1)
+      # 2. 100回モンテカルロ・シミュレーションの実行
+      n_simulations = 100
+      win_counts = np.zeros(len(df_res))
 
+      np.random.seed(42)  # 再現性の確保
+      for _ in range(n_simulations):
+        # 各馬の評価に正規分布のランダムなブレ（運・展開のアヤ）を付与
+        # スコアの10%程度の標準偏差でブレさせる
+        noise = np.random.normal(
+            0, df_res["ベース評価"].values * 0.1, size=len(df_res)
+        )
+        sim_scores = df_res["ベース評価"].values + noise
+        # 最も高かった馬がその回の勝ち抜け（1着）
+        winner_idx = np.argmax(sim_scores)
+        win_counts[winner_idx] += 1
+
+      # 勝率（％）と期待回収率（勝率×オッズ）の計算
+      df_res["100回シミュ勝率(%)"] = (
+          (win_counts / n_simulations) * 100
+      ).round(1)
+      df_res["AI期待回収率(%)"] = (
+          (df_res["100回シミュ勝率(%)"] / 100) * df_res["オッズ_num"] * 100
+      ).round(1)
+      df_res["AI総合評価スコア"] = df_res["ベース評価"].round(1)
+
+      # 勝率順にソート
       df_ranked = df_res.sort_values(
-          by="AI総合評価スコア", ascending=False
+          by="100回シミュ勝率(%)", ascending=False
       ).reset_index(drop=True)
 
-      st.subheader("📊 AIシミュレーション・総合評価ランキング")
+      st.subheader("📊 100回シミュレーション・勝率＆回収率ランキング")
       display_cols = [
           "開催",
           "レース条件",
@@ -89,12 +109,11 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
           "馬名",
           "人気",
           "単勝オッズ",
-          "脚質",
-          "スピード指数",
+          "100回シミュ勝率(%)",
+          "AI期待回収率(%)",
           "AI総合評価スコア",
-          "AI妙味期待値",
+          "スピード指数",
           "上がり3F",
-          "近走5走成績",
           "騎手",
       ]
       available_cols = [c for c in display_cols if c in df_ranked.columns]
@@ -102,8 +121,8 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
       df_display = df_ranked[available_cols]
       st.dataframe(df_display, use_container_width=True)
 
-      # 📥 わかりやすいファイル名（開催・レース条件を反映）を動的に作成
-      file_prefix = "keiba_result"
+      # ファイル名自動生成
+      file_prefix = "keiba_montecarlo"
       if "開催" in df_display.columns and not df_display["開催"].empty:
         kaisai_val = str(df_display["開催"].iloc[0]).strip()
         if kaisai_val and kaisai_val != "nan":
@@ -112,7 +131,6 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
       if "レース条件" in df_display.columns and not df_display["レース条件"].empty:
         cond_val = str(df_display["レース条件"].iloc[0]).strip()
         if cond_val and cond_val != "nan":
-          # ファイル名に使えない記号などを安全に置換
           cond_val = (
               cond_val.replace("/", "_")
               .replace("(", "_")
@@ -121,12 +139,11 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
           )
           file_prefix = f"{file_prefix}_{cond_val}"
 
-      download_file_name = f"{file_prefix}_simulation.csv"
+      download_file_name = f"{file_prefix}_sim100_result.csv"
 
-      # 📥 記録用CSVダウンロードボタン
       csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
       st.download_button(
-          label="📥 このシミュレーション結果をCSVで保存（記録する）",
+          label="📥 100回シミュレーション結果をCSVで保存（記録する）",
           data=csv_download_data,
           file_name=download_file_name,
           mime="text/csv",
@@ -135,18 +152,20 @@ if st.button("🚀 スピード指数算出 ＆ シミュレーション実行")
       st.subheader("🎯 おすすめAI買い目インフォ")
       top_horse = df_ranked.iloc[0]["馬名"]
       top_num = df_ranked.iloc[0]["馬番"]
-      value_horse = (
-          df_ranked.sort_values(by="AI妙味期待値", ascending=False)
-          .iloc[0]["馬名"]
+      top_win = df_ranked.iloc[0]["100回シミュ勝率(%)"]
+
+      # 期待回収率が最も高い馬を穴推奨に
+      df_roi_ranked = df_ranked.sort_values(
+          by="AI期待回収率(%)", ascending=False
       )
-      value_num = (
-          df_ranked.sort_values(by="AI妙味期待値", ascending=False)
-          .iloc[0]["馬番"]
-      )
+      value_horse = df_roi_ranked.iloc[0]["馬名"]
+      value_num = df_roi_ranked.iloc[0]["馬番"]
+      value_roi = df_roi_ranked.iloc[0]["AI期待回収率(%)"]
 
       st.info(
-          f"◎ **本命推し (能力最上位)**: {top_num}番 {top_horse}\n\n"
-          f"★ **穴推奨 (妙味期待値高)**: {value_num}番 {value_horse}"
+          f"◎ **本命推し (シミュレーション勝率最高 {top_win}%)**: {top_num}番"
+          f" {top_horse}\n\n★ **穴・妙味推奨 (期待回収率 {value_roi}%)**: {value_num}番"
+          f" {value_horse}"
       )
   else:
     st.warning("データが入力されていません。CSVデータを貼り付けてください。")
