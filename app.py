@@ -20,7 +20,7 @@ with tab1:
       "CSVデータ貼り付け欄",
       placeholder=(
           "開催,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "阪神,芝1800m(良) 2歳新馬5R,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
+          "阪神,芝1800m(良) 2歳新馬,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
       ),
       height=150,
   )
@@ -52,33 +52,18 @@ with tab1:
 
       if race_num_choice != "追加しない（CSVのまま）":
         target_r = race_num_choice  # "5R" など
-        target_num = target_r.replace("R", "")
-
-        # 1. レース条件の列から「5R」「第5R」などの文字を完全に綺麗に削除する
-        if "レース条件" in df_input.columns:
-          def clean_condition(text):
-            s = str(text)
-            # 様々なパターン（5R, 第5R, 5レースなど）を完全に削ぎ落とす
-            s = s.replace(target_r, "")
-            s = s.replace(f"第{target_num}R", "")
-            s = s.replace(f"{target_num}レース", "")
-            # 正規表現で末尾などに残る◯Rも削除
-            s = re.sub(r'\d{1,2}R', '', s)
-            return s.strip()
-
-          df_input["レース条件"] = df_input["レース条件"].apply(clean_condition)
-
-        # 2. 開催の列（阪神など）は、すでに入っている古いRを一度掃除して、選んだ番号を正しく連結する
-        if "開催" in df_input.columns:
-          def clean_kaisai(text):
+        
+        # 一番左の列（開催名が入る列）に対してのみ、既存のRを掃除してレース番号を綺麗に連結する
+        if len(df_input.columns) > 0:
+          first_col = df_input.columns[0]
+          def clean_and_append(text):
             s = str(text)
             for i in range(1, 13):
               s = s.replace(f"{i}R", "").replace(f"第{i}R", "")
-            return s.strip()
+            s = re.sub(r'\d{1,2}R', '', s)
+            return s.strip() + target_r
 
-          df_input["開催"] = df_input["開催"].apply(
-              lambda x: clean_kaisai(x) + target_r
-          )
+          df_input[first_col] = df_input[first_col].apply(clean_and_append)
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
@@ -157,7 +142,7 @@ with tab1:
 
         st.subheader("📊 100回シミュレーション・勝率＆複勝率ランキング")
         display_cols = [
-            "開催",
+            df_res.columns[0] if len(df_res.columns) > 0 else "開催",
             "レース条件",
             "馬番",
             "馬名",
@@ -177,8 +162,9 @@ with tab1:
 
         kaisai_str = ""
         cond_str = ""
-        if "開催" in df_display.columns and not df_display["開催"].empty:
-          kaisai_val = str(df_display["開催"].iloc[0]).strip()
+        first_col_name = df_display.columns[0] if not df_display.empty else ""
+        if first_col_name and not df_display[first_col_name].empty:
+          kaisai_val = str(df_display[first_col_name].iloc[0]).strip()
           if kaisai_val and kaisai_val != "nan":
             kaisai_str = kaisai_val
 
@@ -259,10 +245,11 @@ with tab2:
     ]
 
     race_info = "—"
-    if "開催" in df_saved.columns and "レース条件" in df_saved.columns:
+    if len(df_saved.columns) > 0 and "レース条件" in df_saved.columns:
+      first_col = df_saved.columns[0]
       kaisai = (
-          str(df_saved["開催"].iloc[0])
-          if not df_saved["開催"].empty
+          str(df_saved[first_col].iloc[0])
+          if not df_saved[first_col].empty
           else ""
       )
       cond = (
@@ -309,6 +296,7 @@ with tab2:
         st.warning("実際の1着馬を選択してください。")
       else:
         ai_top_row = df_saved.iloc[0]
+        first_col = df_saved.columns[0] if len(df_saved.columns) > 0 else ""
         ai_top_str = f"{ai_top_row.get('馬番')}番 {ai_top_row.get('馬名')}"
         ai_win_rate = ai_top_row.get("100回シミュ勝率(%)", 0)
         ai_place_rate = ai_top_row.get("100回シミュ複勝率(%)", 0)
