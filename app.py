@@ -7,7 +7,9 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"])
+tab1, tab2 = tab1, tab2 = st.tabs(
+    ["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"]
+)
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
@@ -192,7 +194,6 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    # レース名の自動取得
     race_info = "—"
     if "開催" in df_saved.columns and "レース条件" in df_saved.columns:
       kaisai = (
@@ -275,10 +276,9 @@ with tab2:
           )
         else:
           st.warning(
-              f"❌ 【判定】不点了（{margin_option}）。次回のパラメータ調整に活かしましょう。"
+              f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
 
-        # スプレッドシート用テキストの自動生成
         from datetime import datetime
 
         today_str = datetime.now().strftime("%Y/%m/%d")
@@ -286,11 +286,18 @@ with tab2:
             f"{today_str}\t{race_info}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
         )
 
-        st.markdown("### 📋 スプレッドシート用コピー欄")
+        st.markdown("### 📋 スプレッドシート用コピー欄（ワンタップ選択）")
         st.write(
-            "以下の枠内のテキストをコピーして、Googleスプレッドシートの行（一番左のセル）にそのまま貼り付けると、きれいに1行分として書き込めます！"
+            "下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートのセルに貼り付けてください。"
         )
-        st.code(sheet_row_text, language="text")
+        st.text_area(
+            "コピー用テキストボックス",
+            value=sheet_row_text,
+            height=70,
+            help=(
+                "タップすると自動で全選択されます。「コピー」を選択してください。"
+            ),
+        )
 
   else:
     st.info(
