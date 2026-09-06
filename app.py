@@ -28,7 +28,6 @@ with tab1:
   race_num_choice = st.selectbox(
       "📌 開催の横に追加するレース番号を選択してください",
       options=[
-          "追加しない（CSVのまま）",
           "1R",
           "2R",
           "3R",
@@ -42,7 +41,7 @@ with tab1:
           "11R",
           "12R",
       ],
-      index=5,
+      index=4,  # デフォルトで5R
   )
 
   df_input = None
@@ -50,20 +49,20 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      if race_num_choice != "追加しない（CSVのまま）":
-        target_r = race_num_choice  # "5R" など
-        
-        # 一番左の列（開催名が入る列）に対してのみ、既存のRを掃除してレース番号を綺麗に連結する
-        if len(df_input.columns) > 0:
-          first_col = df_input.columns[0]
-          def clean_and_append(text):
-            s = str(text)
-            for i in range(1, 13):
-              s = s.replace(f"{i}R", "").replace(f"第{i}R", "")
-            s = re.sub(r'\d{1,2}R', '', s)
-            return s.strip() + target_r
+      # 項目を整理：開催名とレース番号を結合した新しい「開催・レース」列を確実に作成する
+      kaisai_val = "阪神"
+      if "開催" in df_input.columns:
+        raw_k = str(df_input["開催"].iloc[0]).strip()
+        if raw_k and raw_k != "nan":
+          # 既存のRや余計な数字を掃除
+          for i in range(1, 13):
+            raw_k = raw_k.replace(f"{i}R", "").replace(f"第{i}R", "")
+          kaisai_val = raw_k.strip()
 
-          df_input[first_col] = df_input[first_col].apply(clean_and_append)
+      full_kaisai_race = f"{kaisai_val}{race_num_choice}"
+      
+      # 新しい綺麗な列を先頭に挿入
+      df_input.insert(0, "開催・レース", full_kaisai_race)
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
@@ -142,7 +141,7 @@ with tab1:
 
         st.subheader("📊 100回シミュレーション・勝率＆複勝率ランキング")
         display_cols = [
-            df_res.columns[0] if len(df_res.columns) > 0 else "開催",
+            "開催・レース",
             "レース条件",
             "馬番",
             "馬名",
@@ -160,22 +159,8 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        kaisai_str = ""
-        cond_str = ""
-        first_col_name = df_display.columns[0] if not df_display.empty else ""
-        if first_col_name and not df_display[first_col_name].empty:
-          kaisai_val = str(df_display[first_col_name].iloc[0]).strip()
-          if kaisai_val and kaisai_val != "nan":
-            kaisai_str = kaisai_val
-
-        if "レース条件" in df_display.columns and not df_display["レース条件"].empty:
-          cond_val = str(df_display["レース条件"].iloc[0]).strip()
-          if cond_val and cond_val != "nan":
-            cond_str = cond_val.split()[0] if cond_val else ""
-
-        file_prefix = "keiba_montecarlo"
-        if kaisai_str:
-          file_prefix = f"{kaisai_str}_{cond_str}" if cond_str else kaisai_str
+        kaisai_race_title = str(df_display["開催・レース"].iloc[0]) if not df_display["開催・レース"].empty else "レース"
+        file_prefix = kaisai_race_title.replace(" ", "_")
 
         csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -185,14 +170,8 @@ with tab1:
             mime="text/csv",
         )
 
-        df_copy_prep = df_display.copy()
-        race_full_title = f"{kaisai_str} {cond_str}".strip()
-        if not race_full_title:
-          race_full_title = "不明レース"
-        df_copy_prep.insert(0, "レース名", race_full_title)
-
         tsv_buffer = StringIO()
-        df_copy_prep.to_csv(tsv_buffer, sep="\t", index=False)
+        df_display.to_csv(tsv_buffer, sep="\t", index=False)
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
@@ -244,20 +223,7 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    race_info = "—"
-    if len(df_saved.columns) > 0 and "レース条件" in df_saved.columns:
-      first_col = df_saved.columns[0]
-      kaisai = (
-          str(df_saved[first_col].iloc[0])
-          if not df_saved[first_col].empty
-          else ""
-      )
-      cond = (
-          str(df_saved["レース条件"].iloc[0])
-          if not df_saved["レース条件"].empty
-          else ""
-      )
-      race_info = f"{kaisai} {cond}".strip()
+    race_info = str(df_saved["開催・レース"].iloc[0]) if "開催・レース" in df_saved.columns and not df_saved["開催・レース"].empty else "—"
 
     st.subheader("2. 実際のレース結果を選択")
     col1, col2, col3 = st.columns(3)
@@ -296,7 +262,6 @@ with tab2:
         st.warning("実際の1着馬を選択してください。")
       else:
         ai_top_row = df_saved.iloc[0]
-        first_col = df_saved.columns[0] if len(df_saved.columns) > 0 else ""
         ai_top_str = f"{ai_top_row.get('馬番')}番 {ai_top_row.get('馬名')}"
         ai_win_rate = ai_top_row.get("100回シミュ勝率(%)", 0)
         ai_place_rate = ai_top_row.get("100回シミュ複勝率(%)", 0)
