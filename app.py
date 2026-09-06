@@ -1,16 +1,13 @@
-from fpdf import FPDF
 from io import StringIO
 import numpy as np
-import os
 import pandas as pd
 import streamlit as st
-import urllib.request
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
 
 st.title("競馬予想AIシミュレーター ＆ モンテカルロ分析ツール")
 st.write(
-    "出馬表CSVを貼り付けると、100回の模擬レース（モンテカルロ法）を実行し、勝率や回収率を算出してPDFやCSVで保存できます。"
+    "出馬表CSVを貼り付けると、100回の模擬レース（モンテカルロ法）を実行し、勝率や回収率を算出してCSVで保存できます。"
 )
 
 pasted_data = st.text_area(
@@ -133,7 +130,7 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
           )
           file_prefix = f"{file_prefix}_{cond_val}"
 
-      # 📥 1. CSV保存ボタン
+      # 📥 CSV保存ボタン
       csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
       st.download_button(
           label="📥 シミュレーション結果をCSVで保存",
@@ -142,58 +139,9 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
           mime="text/csv",
       )
 
-
-      # 📥 2. PDF生成＆保存機能
-      def generate_pdf(df_result, title_str):
-        pdf = FPDF()
-        pdf.add_page()
-
-        font_path = "NotoSansJP-Regular.ttf"
-        if not os.path.exists(font_path):
-          try:
-            url = "https://github.com/google/fonts/raw/main/ofl/notosansjp/NotoSansJP-Regular.ttf"
-            urllib.request.urlretrieve(url, font_path)
-          except:
-            pass
-
-        if os.path.exists(font_path):
-          pdf.add_font("Japanese", "", font_path)
-          pdf.set_font("Japanese", size=12)
-        else:
-          pdf.set_font("Arial", size=12)
-
-        pdf.cell(
-            200, 10, txt=f"AI Simulation Report: {title_str}", ln=True, align="C"
-        )
-        pdf.ln(5)
-
-        pdf.set_font(
-            "Japanese" if os.path.exists(font_path) else "Arial", size=9
-        )
-        for idx, row in df_result.iterrows():
-          line = (
-              f"No.{row.get('馬番')} {row.get('馬名')} |"
-              f" 勝率:{row.get('100回シミュ勝率(%)')}% |"
-              f" 回収率:{row.get('AI期待回収率(%)')}% |"
-              f" 人気:{row.get('人気')} (単勝:{row.get('単勝オッズ')}倍)"
-          )
-          pdf.cell(200, 8, txt=line, ln=True)
-
-        return pdf.output()
-
-
-      try:
-        pdf_bytes = generate_pdf(df_display, file_prefix)
-        st.download_button(
-            label="📄 シミュレーション結果をPDFで保存",
-            data=pdf_bytes,
-            file_name=f"{file_prefix}_sim100_result.pdf",
-            mime="application/pdf",
-        )
-      except Exception as pdf_err:
-        st.info(
-            "PDFの生成に失敗した場合はブラウザの印刷機能（Ctrl+P等）をご利用ください。"
-        )
+      st.info(
+          "💡 PDFとして保存したい場合は、ブラウザのメニューから「共有」または「印刷」を選び、PDFとして保存してください。"
+      )
 
       st.subheader("🎯 おすすめAI買い目インフォ")
       top_horse = df_ranked.iloc[0]["馬名"]
