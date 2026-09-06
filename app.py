@@ -187,11 +187,25 @@ with tab2:
     df_saved = pd.read_csv(uploaded_sim_file)
     st.success("シミュレーション結果を読み込みました！")
 
-    # 選択肢用の馬リストを作成（例: "4番: ユウトザイシン"）
     horse_options = [
         f"{row.get('馬番')}: {row.get('馬名')}"
         for _, row in df_saved.iterrows()
     ]
+
+    # レース名の自動取得
+    race_info = "—"
+    if "開催" in df_saved.columns and "レース条件" in df_saved.columns:
+      kaisai = (
+          str(df_saved["開催"].iloc[0])
+          if not df_saved["開催"].empty
+          else ""
+      )
+      cond = (
+          str(df_saved["レース条件"].iloc[0])
+          if not df_saved["レース条件"].empty
+          else ""
+      )
+      race_info = f"{kaisai} {cond}".strip()
 
     st.subheader("2. 実際のレース結果を選択")
     col1, col2, col3 = st.columns(3)
@@ -208,15 +222,12 @@ with tab2:
           "🥉 実際の3着馬", options=["選択してください"] + horse_options
       )
 
-    # 着差（惜しさの評価用）の選択
-    st.subheader("3. 着差・状況の記録（オプション）")
     margin_option = st.selectbox(
         "AI本命馬の着差・状況",
         options=[
-            "選択なし",
             "1着（的中）",
             "2着・3着（複勝圏内）",
-            "4着以下（ハナ差・クビ差・クレイジー惜しい）",
+            "4着以下（ハナ差・クビ差・惜しい）",
             "4着以下（完敗・見当違い）",
         ],
     )
@@ -225,9 +236,11 @@ with tab2:
       if actual_1st == "選択してください":
         st.warning("実際の1着馬を選択してください。")
       else:
-        # AIの本命（ランキング1行目）
         ai_top_row = df_saved.iloc[0]
-        ai_top_str = f"{ai_top_row.get('馬番')}: {ai_top_row.get('馬名')}"
+        ai_top_str = f"{ai_top_row.get('馬番')}番 {ai_top_row.get('馬名')}"
+        ai_win_rate = ai_top_row.get("100回シミュ勝率(%)", 0)
+        ai_place_rate = ai_top_row.get("100回シミュ複勝率(%)", 0)
+        ai_roi = ai_top_row.get("AI期待回収率(%)", 0)
 
         st.markdown("---")
         st.subheader("📝 検証結果レポート")
@@ -241,12 +254,16 @@ with tab2:
               f" {actual_2nd}\n3着: {actual_3rd}"
           )
 
-        # 的中判定
-        is_win_hit = ai_top_str in actual_1st
+        is_win_hit = (
+            str(ai_top_row.get("馬番")) in actual_1st
+            or ai_top_row.get("馬名") in actual_1st
+        )
         is_place_hit = (
-            ai_top_str in actual_1st
-            or ai_top_str in actual_2nd
-            or ai_top_str in actual_3rd
+            is_win_hit
+            or str(ai_top_row.get("馬番")) in actual_2nd
+            or ai_top_row.get("馬名") in actual_2nd
+            or str(ai_top_row.get("馬番")) in actual_3rd
+            or ai_top_row.get("馬名") in actual_3rd
         )
 
         if is_win_hit:
@@ -258,8 +275,23 @@ with tab2:
           )
         else:
           st.warning(
-              f"❌ 【判定】不的中。選択された状況（{margin_option}）を元に、次回のパラメータ調整に活かしましょう。"
+              f"❌ 【判定】不点了（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
+
+        # スプレッドシート用テキストの自動生成
+        from datetime import datetime
+
+        today_str = datetime.now().strftime("%Y/%m/%d")
+        sheet_row_text = (
+            f"{today_str}\t{race_info}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
+        )
+
+        st.markdown("### 📋 スプレッドシート用コピー欄")
+        st.write(
+            "以下の枠内のテキストをコピーして、Googleスプレッドシートの行（一番左のセル）にそのまま貼り付けると、きれいに1行分として書き込めます！"
+        )
+        st.code(sheet_row_text, language="text")
+
   else:
     st.info(
         "まずはTab1で保存したシミュレーション結果のCSVファイルをアップロードしてください。"
