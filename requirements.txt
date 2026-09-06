@@ -2,3 +2,6 @@ streamlit
 pandas
 Pillow
 google-generativeai
+streamlit
+pandas
+fpdf2
