@@ -41,7 +41,7 @@ with tab1:
           "11R",
           "12R",
       ],
-      index=4,  # デフォルトで5R
+      index=4,  # デフォルト5R
   )
 
   df_input = None
@@ -49,19 +49,15 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      # 項目を整理：開催名とレース番号を結合した新しい「開催・レース」列を確実に作成する
       kaisai_val = "阪神"
       if "開催" in df_input.columns:
         raw_k = str(df_input["開催"].iloc[0]).strip()
         if raw_k and raw_k != "nan":
-          # 既存のRや余計な数字を掃除
           for i in range(1, 13):
             raw_k = raw_k.replace(f"{i}R", "").replace(f"第{i}R", "")
           kaisai_val = raw_k.strip()
 
       full_kaisai_race = f"{kaisai_val}{race_num_choice}"
-      
-      # 新しい綺麗な列を先頭に挿入
       df_input.insert(0, "開催・レース", full_kaisai_race)
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
@@ -262,7 +258,9 @@ with tab2:
         st.warning("実際の1着馬を選択してください。")
       else:
         ai_top_row = df_saved.iloc[0]
-        ai_top_str = f"{ai_top_row.get('馬番')}番 {ai_top_row.get('馬名')}"
+        ai_top_num = str(ai_top_row.get("馬番"))
+        ai_top_name = str(ai_top_row.get("馬名"))
+        ai_top_str = f"{ai_top_num}番 {ai_top_name}"
         ai_win_rate = ai_top_row.get("100回シミュ勝率(%)", 0)
         ai_place_rate = ai_top_row.get("100回シミュ複勝率(%)", 0)
         ai_roi = ai_top_row.get("AI期待回収率(%)", 0)
@@ -279,16 +277,26 @@ with tab2:
               f" {actual_2nd}\n3着: {actual_3rd}"
           )
 
-        is_win_hit = (
-            str(ai_top_row.get('馬番')) in actual_1st
-            or ai_top_row.get('馬名') in actual_1st
-        )
+        # 厳密な判定（馬番が一致しているか、または馬名が完全一致しているか）
+        def check_hit(selected_str, target_num, target_name):
+          if not selected_str or selected_str == "選択してください":
+            return False
+          # 選択された文字列の先頭付近にある馬番（例: "1番" または "1番 "）を抽出
+          match = re.match(r"^(\d+)番", selected_str.strip())
+          if match:
+            selected_num = match.group(1)
+            if selected_num == str(target_num):
+              return True
+          # または馬名が含まれているか
+          if target_name in selected_str:
+            return True
+          return False
+
+        is_win_hit = check_hit(actual_1st, ai_top_num, ai_top_name)
         is_place_hit = (
             is_win_hit
-            or str(ai_top_row.get('馬番')) in actual_2nd
-            or ai_top_row.get('馬名') in actual_2nd
-            or str(ai_top_row.get('馬番')) in actual_3rd
-            or ai_top_row.get('馬名') in actual_3rd
+            or check_hit(actual_2nd, ai_top_num, ai_top_name)
+            or check_hit(actual_3rd, ai_top_num, ai_top_name)
         )
 
         if is_win_hit:
