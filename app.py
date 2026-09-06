@@ -8,7 +8,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"])
+tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証"])
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
@@ -168,17 +168,12 @@ with tab1:
         if "レース条件" in df_display.columns and not df_display["レース条件"].empty:
           cond_val = str(df_display["レース条件"].iloc[0]).strip()
           if cond_val and cond_val != "nan":
-            cond_str = cond_val
+            # ファイル名が長くなりすぎないよう、条件テキストを短くスッキリ整える
+            cond_str = cond_val.split()[0] if cond_val else ""
 
         file_prefix = "keiba_montecarlo"
-        if kaisai_str or cond_str:
-          clean_cond = (
-              cond_str.replace("/", "_")
-              .replace("(", "_")
-              .replace(")", "")
-              .replace(" ", "")
-          )
-          file_prefix = f"{kaisai_str}_{clean_cond}"
+        if kaisai_str:
+          file_prefix = f"{kaisai_str}_{cond_str}" if cond_str else kaisai_str
 
         csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -336,7 +331,7 @@ with tab2:
           )
         else:
           st.warning(
-              f"❌ 【判定】不 típico（{margin_option}）。次回のパラメータ調整に活かしましょう。"
+              f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
 
         from datetime import datetime
