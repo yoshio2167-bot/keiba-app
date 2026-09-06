@@ -12,7 +12,7 @@ tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照�
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
   st.write(
-      "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してCSVで保存できます。"
+      "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してCSVやスプレッドシート用テキストで保存できます。"
   )
 
   pasted_data = st.text_area(
@@ -127,22 +127,30 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
+        # ファイル名・レース情報の構築
         file_prefix = "keiba_montecarlo"
+        kaisai_str = ""
+        cond_str = ""
         if "開催" in df_display.columns and not df_display["開催"].empty:
           kaisai_val = str(df_display["開催"].iloc[0]).strip()
           if kaisai_val and kaisai_val != "nan":
-            file_prefix = kaisai_val
+            kaisai_str = kaisai_val
 
         if "レース条件" in df_display.columns and not df_display["レース条件"].empty:
           cond_val = str(df_display["レース条件"].iloc[0]).strip()
           if cond_val and cond_val != "nan":
-            cond_val = (
+            cond_str = cond_val
+            clean_cond = (
                 cond_val.replace("/", "_")
                 .replace("(", "_")
                 .replace(")", "")
                 .replace(" ", "")
             )
-            file_prefix = f"{file_prefix}_{cond_val}"
+            file_prefix = f"{kaisai_str}_{clean_cond}"
+
+        race_full_title = f"{kaisai_str} {cond_str}".strip()
+        if not race_full_title:
+          race_full_title = "不明レース"
 
         csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -150,6 +158,24 @@ with tab1:
             data=csv_download_data,
             file_name=f"{file_prefix}_sim100_result.csv",
             mime="text/csv",
+        )
+
+        # Tab1用のスプレッドシート一発コピー用テキスト生成（tsv形式）
+        tsv_buffer = StringIO()
+        df_display.to_csv(tsv_buffer, sep="\t", index=False)
+        sim_copy_text = tsv_buffer.getvalue()
+
+        st.markdown(
+            "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
+        )
+        st.write(
+            "下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートに貼り付けてください。"
+        )
+        st.text_area(
+            "シミュレーション結果コピー用ボックス",
+            value=sim_copy_text,
+            height=100,
+            help="タップすると自動で全選択されます。",
         )
 
         st.subheader("🎯 おすすめAI買い目インフォ")
@@ -291,17 +317,15 @@ with tab2:
             f"{today_str}\t{race_info}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
         )
 
-        st.markdown("### 📋 スプレッドシート用コピー欄（ワンタップ選択）")
+        st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
         st.write(
-            "下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートのセルに貼り付けてください。"
+            "先頭にレース名が入っています。下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートのセルに貼り付けてください。"
         )
         st.text_area(
-            "コピー用テキストボックス",
+            "検証結果コピー用ボックス",
             value=sheet_row_text,
             height=70,
-            help=(
-                "タップすると自動で全選択されます。「コピー」を選択してください。"
-            ),
+            help="タップすると自動で全選択されます。",
         )
 
   else:
