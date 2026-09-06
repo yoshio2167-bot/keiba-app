@@ -7,7 +7,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ モンテカルロ分析ツール")
 st.write(
-    "出馬表CSVを貼り付けると、100回の模擬レース（モンテカルロ法）を実行し、勝率や回収率を算出してCSVで保存できます。"
+    "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してCSVで保存できます。"
 )
 
 pasted_data = st.text_area(
@@ -33,7 +33,7 @@ if pasted_data:
 if st.button("🚀 100回シミュレーション＆予想実行"):
   if df_input is not None and not df_input.empty:
     with st.spinner(
-        "100回の模擬レース（モンテカルロ法）を実行・集計中..."
+        "100回の模擬レース（モンテカルロ法）の勝率・複勝率を集計中..."
     ):
       df_res = df_input.copy()
 
@@ -71,6 +71,9 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
 
       n_simulations = 100
       win_counts = np.zeros(len(df_res))
+      place_counts = np.zeros(
+          len(df_res)
+      )  # 3着以内（複勝圏内）に入った回数
 
       np.random.seed(42)
       for _ in range(n_simulations):
@@ -78,22 +81,35 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
             0, df_res["ベース評価"].values * 0.1, size=len(df_res)
         )
         sim_scores = df_res["ベース評価"].values + noise
-        winner_idx = np.argmax(sim_scores)
+
+        # スコアが高い順に並び替え、上位3頭のインデックスを取得（出走頭数が3頭未満の場合は存在する頭数まで）
+        top_indices = np.argsort(sim_scores)[::-1]
+        winner_idx = top_indices[0]
         win_counts[winner_idx] += 1
 
+        # 3着以内（複勝）のカウント
+        placers = top_indices[: min(3, len(df_res))]
+        for p_idx in placers:
+          place_counts[p_idx] += 1
+
+      # 勝率・複勝率・回収率の算出
       df_res["100回シミュ勝率(%)"] = (
           (win_counts / n_simulations) * 100
+      ).round(1)
+      df_res["100回シミュ複勝率(%)"] = (
+          (place_counts / n_simulations) * 100
       ).round(1)
       df_res["AI期待回収率(%)"] = (
           (df_res["100回シミュ勝率(%)"] / 100) * df_res["オッズ_num"] * 100
       ).round(1)
       df_res["AI総合評価スコア"] = df_res["ベース評価"].round(1)
 
+      # 勝率順にソート
       df_ranked = df_res.sort_values(
           by="100回シミュ勝率(%)", ascending=False
       ).reset_index(drop=True)
 
-      st.subheader("📊 100回シミュレーション・勝率＆回収率ランキング")
+      st.subheader("📊 100回シミュレーション・勝率＆複勝率ランキング")
       display_cols = [
           "開催",
           "レース条件",
@@ -102,6 +118,7 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
           "人気",
           "単勝オッズ",
           "100回シミュ勝率(%)",
+          "100回シミュ複勝率(%)",
           "AI期待回収率(%)",
           "AI総合評価スコア",
           "スピード指数",
@@ -147,6 +164,7 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
       top_horse = df_ranked.iloc[0]["馬名"]
       top_num = df_ranked.iloc[0]["馬番"]
       top_win = df_ranked.iloc[0]["100回シミュ勝率(%)"]
+      top_place = df_ranked.iloc[0]["100回シミュ複勝率(%)"]
 
       df_roi_ranked = df_ranked.sort_values(
           by="AI期待回収率(%)", ascending=False
@@ -156,9 +174,9 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
       value_roi = df_roi_ranked.iloc[0]["AI期待回収率(%)"]
 
       st.info(
-          f"◎ **本命推し (シミュレーション勝率最高 {top_win}%)**: {top_num}番"
-          f" {top_horse}\n\n★ **穴・妙味推奨 (期待回収率 {value_roi}%)**: {value_num}番"
-          f" {value_horse}"
+          f"◎ **本命推し**: {top_num}番 {top_horse} (勝率: {top_win}% / 複勝率:"
+          f" {top_place}%)\n\n★ **穴・妙味推奨**: {value_num}番"
+          f" {value_horse} (期待回収率: {value_roi}%)"
       )
   else:
     st.warning("データが入力されていません。CSVデータを貼り付けてください。")
