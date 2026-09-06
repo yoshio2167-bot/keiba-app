@@ -5,6 +5,21 @@ import pandas as pd
 from PIL import Image
 import streamlit as st
 
+# 起動時に確実に対象ライブラリをインポート
+try:
+  import google.generativeai as genai
+
+  USE_LEGACY_GENAI = True
+except ImportError:
+  try:
+    from google import genai
+
+    USE_LEGACY_GENAI = False
+  except ImportError:
+    st.error(
+        "エラー: 必要なAIライブラリが見つかりません。requirements.txtを確認してください。"
+    )
+
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
 
 st.title("競馬予想AIシミュレーター ＆ スクショ解析ツール")
@@ -131,8 +146,6 @@ with tab2:
           "AIがレース条件と出馬表データを同時に解析・抽出中..."
       ):
         try:
-          import google.generativeai as genai
-
           api_key = st.secrets.get("GOOGLE_API_KEY") or os.environ.get(
               "GOOGLE_API_KEY"
           )
@@ -142,10 +155,6 @@ with tab2:
                 "エラー: APIキー（GOOGLE_API_KEY）がSecretsに設定されていません。"
             )
           else:
-            genai.configure(api_key=api_key)
-            # 制限にひっかかりにくい安定モデル gemini-1.5-flash を使用
-            model = genai.GenerativeModel("gemini-1.5-flash")
-
             pil_images = []
             for file in uploaded_files:
               img = Image.open(file)
@@ -181,7 +190,16 @@ with tab2:
             max_retries = 3
             for attempt in range(max_retries):
               try:
-                response = model.generate_content(content_list)
+                if USE_LEGACY_GENAI:
+                  genai.configure(api_key=api_key)
+                  model = genai.GenerativeModel("gemini-1.5-flash")
+                  response = model.generate_content(content_list)
+                else:
+                  client = genai.Client(api_key=api_key)
+                  # 新クライアント向け形式
+                  response = client.models.generate_content(
+                      model="gemini-1.5-flash", contents=content_list
+                  )
                 break
               except Exception as err:
                 if "429" in str(err) and attempt < max_retries - 1:
@@ -216,6 +234,4 @@ with tab2:
               st.error("AIから応答がありませんでした。")
 
         except Exception as e:
-          st.error(
-              f"解析中にエラーが発生しました（無料枠の上限を超えた場合は少し時間を置いてください）: {e}"
-          )
+          st.error(f"解析中にエラーが発生しました: {e}")
