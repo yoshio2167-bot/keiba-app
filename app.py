@@ -51,31 +51,33 @@ with tab1:
       df_input = pd.read_csv(StringIO(pasted_data))
 
       if race_num_choice != "追加しない（CSVのまま）":
-        # どのパターン（5R、第5R、新馬5Rなど）であっても、選択したレース番号をレース条件側から完全に根こそぎ削除する
-        target_num = race_num_choice.replace("R", "")
-        patterns = [race_num_choice, f"第{target_num}R", f"{target_num}レース"]
+        target_r = race_num_choice  # "5R" など
+        target_num = target_r.replace("R", "")
 
+        # 1. レース条件の列から「5R」「第5R」などの文字を完全に綺麗に削除する
         if "レース条件" in df_input.columns:
-          def clean_cond(val):
-            s = str(val)
-            for p in patterns:
-              s = s.replace(p, "")
-            # 末尾に残る余計な数字+Rのパターンも強力に削除
-            s = re.sub(r'\b\d{1,2}R\b', '', s)
+          def clean_condition(text):
+            s = str(text)
+            # 様々なパターン（5R, 第5R, 5レースなど）を完全に削ぎ落とす
+            s = s.replace(target_r, "")
+            s = s.replace(f"第{target_num}R", "")
+            s = s.replace(f"{target_num}レース", "")
+            # 正規表現で末尾などに残る◯Rも削除
+            s = re.sub(r'\d{1,2}R', '', s)
             return s.strip()
 
-          df_input["レース条件"] = df_input["レース条件"].apply(clean_cond)
+          df_input["レース条件"] = df_input["レース条件"].apply(clean_condition)
 
-        # 開催列（阪神など）の後ろに選んだレース番号を綺麗に連結する
+        # 2. 開催の列（阪神など）は、すでに入っている古いRを一度掃除して、選んだ番号を正しく連結する
         if "開催" in df_input.columns:
-          def clean_kaisai(val):
-            s = str(val)
+          def clean_kaisai(text):
+            s = str(text)
             for i in range(1, 13):
               s = s.replace(f"{i}R", "").replace(f"第{i}R", "")
             return s.strip()
 
           df_input["開催"] = df_input["開催"].apply(
-              lambda x: clean_kaisai(x) + race_num_choice
+              lambda x: clean_kaisai(x) + target_r
           )
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
