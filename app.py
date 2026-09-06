@@ -7,9 +7,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2 = tab1, tab2 = st.tabs(
-    ["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"]
-)
+tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・精度検証"])
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
@@ -212,15 +210,21 @@ with tab2:
     col1, col2, col3 = st.columns(3)
     with col1:
       actual_1st = st.selectbox(
-          "🥇 実際の1着馬", options=["選択してください"] + horse_options
+          "🥇 実際の1着馬",
+          options=["選択してください"] + horse_options,
+          index=0,
       )
     with col2:
       actual_2nd = st.selectbox(
-          "🥈 実際の2着馬", options=["選択してください"] + horse_options
+          "🥈 実際の2着馬",
+          options=["選択してください"] + horse_options,
+          index=0,
       )
     with col3:
       actual_3rd = st.selectbox(
-          "🥉 実際の3着馬", options=["選択してください"] + horse_options
+          "🥉 実際の3着馬",
+          options=["選択してください"] + horse_options,
+          index=0,
       )
 
     margin_option = st.selectbox(
@@ -231,6 +235,7 @@ with tab2:
             "4着以下（ハナ差・クビ差・惜しい）",
             "4着以下（完敗・見当違い）",
         ],
+        index=0,
     )
 
     if st.button("🔍 予想結果を検証・判定する"):
