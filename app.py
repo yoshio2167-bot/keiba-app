@@ -26,7 +26,7 @@ with tab1:
   )
 
   race_num_choice = st.selectbox(
-      "📌 開催の横に追加するレース番号を選択してください",
+      "📌 レース番号を選択してください",
       options=[
           "1R",
           "2R",
@@ -49,6 +49,7 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
+      # 1. 開催地の抽出
       kaisai_val = "阪神"
       if "開催" in df_input.columns:
         raw_k = str(df_input["開催"].iloc[0]).strip()
@@ -57,8 +58,30 @@ with tab1:
             raw_k = raw_k.replace(f"{i}R", "").replace(f"第{i}R", "")
           kaisai_val = raw_k.strip()
 
-      full_kaisai_race = f"{kaisai_val}{race_num_choice}"
-      df_input.insert(0, "開催・レース", full_kaisai_race)
+      # 2. レース条件の分解（距離・馬場 と レース条件クラス名に分ける）
+      distance_track = "—"
+      race_class = "—"
+      if "レース条件" in df_input.columns:
+        raw_cond = str(df_input["レース条件"].iloc[0]).strip()
+        # 例: "芝1800m(良) 2歳新馬5R" から余分なRを掃除
+        for i in range(1, 13):
+          raw_cond = raw_cond.replace(f"{i}R", "").replace(f"第{i}R", "")
+        raw_cond = raw_cond.strip()
+
+        # スペースや括弧で分割を試みる（例: "芝1800m(良)" と "2歳新馬"）
+        parts = raw_cond.split()
+        if len(parts) > 0:
+          distance_track = parts[0]
+        if len(parts) > 1:
+          race_class = " ".join(parts[1:])
+        else:
+          race_class = raw_cond
+
+      # 3. 分割した新しい項目をデータフレームに挿入
+      df_input.insert(0, "レース番号", race_num_choice)
+      df_input.insert(0, "開催地", kaisai_val)
+      df_input["距離・馬場"] = distance_track
+      df_input["詳細条件"] = race_class
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
@@ -137,8 +160,10 @@ with tab1:
 
         st.subheader("📊 100回シミュレーション・勝率＆複勝率ランキング")
         display_cols = [
-            "開催・レース",
-            "レース条件",
+            "開催地",
+            "レース番号",
+            "距離・馬場",
+            "詳細条件",
             "馬番",
             "馬名",
             "人気",
@@ -155,8 +180,9 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        kaisai_race_title = str(df_display["開催・レース"].iloc[0]) if not df_display["開催・レース"].empty else "レース"
-        file_prefix = kaisai_race_title.replace(" ", "_")
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
+        r_num_title = str(df_display["レース番号"].iloc[0]) if not df_display["レース番号"].empty else "5R"
+        file_prefix = f"{kaisai_title}{r_num_title}"
 
         csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -219,7 +245,10 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    race_info = str(df_saved["開催・レース"].iloc[0]) if "開催・レース" in df_saved.columns and not df_saved["開催・レース"].empty else "—"
+    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
+    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "5R"
+    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
+    cond_val = str(df_saved["詳細条件"].iloc[0]) if "詳細条件" in df_saved.columns and not df_saved["詳細条件"].empty else ""
 
     st.subheader("2. 実際のレース結果を選択")
     col1, col2, col3 = st.columns(3)
@@ -277,17 +306,14 @@ with tab2:
               f" {actual_2nd}\n3着: {actual_3rd}"
           )
 
-        # 厳密な判定（馬番が一致しているか、または馬名が完全一致しているか）
         def check_hit(selected_str, target_num, target_name):
           if not selected_str or selected_str == "選択してください":
             return False
-          # 選択された文字列の先頭付近にある馬番（例: "1番" または "1番 "）を抽出
           match = re.match(r"^(\d+)番", selected_str.strip())
           if match:
             selected_num = match.group(1)
             if selected_num == str(target_num):
               return True
-          # または馬名が含まれているか
           if target_name in selected_str:
             return True
           return False
@@ -314,8 +340,9 @@ with tab2:
         from datetime import datetime
 
         today_str = datetime.now().strftime("%Y/%m/%d")
+        # スプレッドシート用に独立した列としてタブ区切りで生成
         sheet_row_text = (
-            f"{today_str}\t{race_info}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
+            f"{today_str}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
