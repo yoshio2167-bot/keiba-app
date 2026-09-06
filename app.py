@@ -127,8 +127,7 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        # ファイル名・レース情報の構築
-        file_prefix = "keiba_montecarlo"
+        # レース情報の取得
         kaisai_str = ""
         cond_str = ""
         if "開催" in df_display.columns and not df_display["開催"].empty:
@@ -140,17 +139,16 @@ with tab1:
           cond_val = str(df_display["レース条件"].iloc[0]).strip()
           if cond_val and cond_val != "nan":
             cond_str = cond_val
-            clean_cond = (
-                cond_val.replace("/", "_")
-                .replace("(", "_")
-                .replace(")", "")
-                .replace(" ", "")
-            )
-            file_prefix = f"{kaisai_str}_{clean_cond}"
 
-        race_full_title = f"{kaisai_str} {cond_str}".strip()
-        if not race_full_title:
-          race_full_title = "不明レース"
+        file_prefix = "keiba_montecarlo"
+        if kaisai_str or cond_str:
+          clean_cond = (
+              cond_str.replace("/", "_")
+              .replace("(", "_")
+              .replace(")", "")
+              .replace(" ", "")
+          )
+          file_prefix = f"{kaisai_str}_{clean_cond}"
 
         csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -160,16 +158,22 @@ with tab1:
             mime="text/csv",
         )
 
-        # Tab1用のスプレッドシート一発コピー用テキスト生成（tsv形式）
+        # Tab1用のスプレッドシート一発コピー用テキスト生成（レース情報を先頭に挿入）
+        df_copy_prep = df_display.copy()
+        race_full_title = f"{kaisai_str} {cond_str}".strip()
+        if not race_full_title:
+          race_full_title = "不明レース"
+        df_copy_prep.insert(0, "レース名", race_full_title)
+
         tsv_buffer = StringIO()
-        df_display.to_csv(tsv_buffer, sep="\t", index=False)
+        df_copy_prep.to_csv(tsv_buffer, sep="\t", index=False)
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
             "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
         )
         st.write(
-            "下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートに貼り付けてください。"
+            "先頭にレース名が入っています。下のボックス内を**1回タップ**すると全選択されるので、そのままコピーしてスプレッドシートに貼り付けてください。"
         )
         st.text_area(
             "シミュレーション結果コピー用ボックス",
@@ -214,7 +218,7 @@ with tab2:
     st.success("シミュレーション結果を読み込みました！")
 
     horse_options = [
-        f"{row.get('馬番')}: {row.get('馬名')}"
+        f"{row.get('馬番')}番 {row.get('馬名')} ({row.get('人気')}人気・{row.get('単勝オッズ')}倍)"
         for _, row in df_saved.iterrows()
     ]
 
