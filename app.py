@@ -5,7 +5,6 @@ import pandas as pd
 from PIL import Image
 import streamlit as st
 
-# 起動時に確実に対象ライブラリをインポート
 try:
   import google.generativeai as genai
 
@@ -17,7 +16,8 @@ except ImportError:
     USE_LEGACY_GENAI = False
   except ImportError:
     st.error(
-        "エラー: 必要なAIライブラリが見つかりません。requirements.txtを確認してください。"
+        "エラー: google-generativeai がインストールされていません。"
+        " requirements.txt を確認してください。"
     )
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
@@ -192,13 +192,13 @@ with tab2:
               try:
                 if USE_LEGACY_GENAI:
                   genai.configure(api_key=api_key)
-                  model = genai.GenerativeModel("gemini-1.5-flash")
+                  # 新しいAPIキーに対応している最新モデルを指定
+                  model = genai.GenerativeModel("gemini-3.6-flash")
                   response = model.generate_content(content_list)
                 else:
                   client = genai.Client(api_key=api_key)
-                  # 新クライアント向け形式
                   response = client.models.generate_content(
-                      model="gemini-1.5-flash", contents=content_list
+                      model="gemini-3.6-flash", contents=content_list
                   )
                 break
               except Exception as err:
