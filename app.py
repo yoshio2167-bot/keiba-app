@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide")
+st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
@@ -21,10 +21,9 @@ with tab1:
           "開催,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
           "阪神,芝1400m(良) 2歳未勝利,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
       ),
-      height=180,
+      height=150,
   )
 
-  # デフォルトを1R（index=1）に設定
   race_num_choice = st.selectbox(
       "📌 開催の横に追加するレース番号を選択してください",
       options=[
@@ -42,7 +41,7 @@ with tab1:
           "11R",
           "12R",
       ],
-      index=1,  # デフォルトで1Rを選択
+      index=1,
   )
 
   df_input = None
@@ -62,15 +61,11 @@ with tab1:
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
     except Exception as e:
-      st.info(
-          "CSVデータを貼り付けるとここにプレビューが表示されます。（カンマ区切りとヘッダーを確認してください）"
-      )
+      st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 100回シミュレーション＆予想実行"):
+  if st.button("🚀 100回シミュレーション＆予想実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner(
-          "100回の模擬レース（モンテカルロ法）の勝率・複勝率を集計中..."
-      ):
+      with st.spinner("100回の模擬レース（モンテカルロ法）を集計中..."):
         df_res = df_input.copy()
 
         df_res["上がり3F_num"] = pd.to_numeric(
@@ -316,15 +311,15 @@ with tab2:
           )
 
         is_win_hit = (
-            str(ai_top_row.get("馬番")) in actual_1st
-            or ai_top_row.get("馬名") in actual_1st
+            str(ai_top_row.get('馬番')) in actual_1st
+            or ai_top_row.get('馬名') in actual_1st
         )
         is_place_hit = (
             is_win_hit
-            or str(ai_top_row.get("馬番")) in actual_2nd
-            or ai_top_row.get("馬名") in actual_2nd
-            or str(ai_top_row.get("馬番")) in actual_3rd
-            or ai_top_row.get("馬名") in actual_3rd
+            or str(ai_top_row.get('馬番')) in actual_2nd
+            or ai_top_row.get('馬名') in actual_2nd
+            or str(ai_top_row.get('馬番')) in actual_3rd
+            or ai_top_row.get('馬名') in actual_3rd
         )
 
         if is_win_hit:
