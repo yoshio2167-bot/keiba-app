@@ -1,5 +1,6 @@
 from fpdf import FPDF
 from io import StringIO
+import numpy as np
 import os
 import pandas as pd
 import streamlit as st
@@ -74,8 +75,6 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
       n_simulations = 100
       win_counts = np.zeros(len(df_res))
 
-      import numpy as np
-
       np.random.seed(42)
       for _ in range(n_simulations):
         noise = np.random.normal(
@@ -149,7 +148,6 @@ if st.button("🚀 100回シミュレーション＆予想実行"):
         pdf = FPDF()
         pdf.add_page()
 
-        # 日本語フォントの準備（Google FontsからNotoSansJPを取得して利用）
         font_path = "NotoSansJP-Regular.ttf"
         if not os.path.exists(font_path):
           try:
