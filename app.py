@@ -19,7 +19,7 @@ with tab1:
       "CSVデータ貼り付け欄",
       placeholder=(
           "開催,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "阪神,芝1400m(良) 2歳未勝利,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
+          "阪神,芝1800m(良) 2歳新馬,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
       ),
       height=150,
   )
@@ -41,7 +41,7 @@ with tab1:
           "11R",
           "12R",
       ],
-      index=1,
+      index=5,  # デフォルトで5Rを選択
   )
 
   df_input = None
@@ -49,14 +49,18 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      if race_num_choice != "追加しない（CSVのまま）" and "開催" in df_input.columns:
-        df_input["開催"] = df_input["開催"].astype(str).apply(
-            lambda x: (
-                f"{x}{race_num_choice}"
-                if not any(f"{i}R" in x for i in range(1, 13))
-                else x
-            )
-        )
+      if race_num_choice != "追加しない（CSVのまま）":
+        # 1. レース条件側に混入している「◯R」をあらかじめ綺麗に削除する
+        if "レース条件" in df_input.columns:
+          df_input["レース条件"] = df_input["レース条件"].astype(str).apply(
+              lambda x: x.replace(race_num_choice, "").strip()
+          )
+
+        # 2. 開催列の後ろに選択したレース番号を正しく合体させる
+        if "開催" in df_input.columns:
+          df_input["開催"] = df_input["開催"].astype(str).apply(
+              lambda x: x.replace(race_num_choice, "").strip() + race_num_choice
+          )
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
@@ -311,15 +315,15 @@ with tab2:
           )
 
         is_win_hit = (
-            str(ai_top_row.get('馬番')) in actual_1st
-            or ai_top_row.get('馬名') in actual_1st
+            str(ai_top_row.get("馬番")) in actual_1st
+            or ai_top_row.get("馬名") in actual_1st
         )
         is_place_hit = (
             is_win_hit
-            or str(ai_top_row.get('馬番')) in actual_2nd
-            or ai_top_row.get('馬名') in actual_2nd
-            or str(ai_top_row.get('馬番')) in actual_3rd
-            or ai_top_row.get('馬名') in actual_3rd
+            or str(ai_top_row.get("馬番")) in actual_2nd
+            or ai_top_row.get("馬名") in actual_2nd
+            or str(ai_top_row.get("馬番")) in actual_3rd
+            or ai_top_row.get("馬名") in actual_3rd
         )
 
         if is_win_hit:
