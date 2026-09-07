@@ -19,7 +19,8 @@ with tab1:
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
       placeholder=(
-          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,,,,,,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
+          "開催地,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
+          "阪神,5R 芝1800m(良) 2歳新馬,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
       ),
       height=180,
   )
@@ -27,61 +28,83 @@ with tab1:
   df_input = None
   if pasted_data:
     try:
-      # ヘッダー行の有無を自動判定して安全に読み込む処理
-      first_line = pasted_data.strip().split("\n")[0]
-      has_header = "馬番" in first_line or "馬名" in first_line or "日付" in first_line
-
-      if has_header:
-        df_input = pd.read_csv(StringIO(pasted_data))
-      else:
-        # ヘッダーがない場合は自動で列名を割り当てる
-        expected_cols = [
-            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
-            "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
-            "実際の1着馬", "着差・判定メモ",
-            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F",
-            "スピード指数", "近走5走成績", "騎手", "斤量"
-        ]
-        df_input = pd.read_csv(StringIO(pasted_data), header=None)
-        if len(df_input.columns) == len(expected_cols):
-          df_input.columns = expected_cols
+      # 1. データのクレンジングと読み込み
+      lines = [line.strip() for line in pasted_data.strip().split("\n") if line.strip()]
+      if len(lines) > 0:
+        # 1行目がヘッダーかどうかを判定
+        first_line = lines[0]
+        if "開催地" in first_line or "馬番" in first_line or "馬名" in first_line:
+          csv_io = StringIO("\n".join(lines))
+          df_input = pd.read_csv(csv_io)
         else:
-          # 列数が異なる場合でも後ろから合わせて安全にマッピング
-          df_input.columns = [f"col_{i}" for i in range(len(df_input.columns))]
+          # ヘッダーがない場合は正しいカラム名を付与して読み込む
+          cols = [
+              "開催地", "レース条件", "馬番", "馬名", "人気", "単勝オッズ",
+              "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+          ]
+          csv_io = StringIO("\n".join(lines))
+          df_input = pd.read_csv(csv_io, header=None)
+          if len(df_input.columns) == len(cols):
+            df_input.columns = cols
 
-      def extract_num(val, default=5.0):
-        try:
-          s = str(val)
-          m = re.search(r'([\d\.]+)', s)
-          if m:
-            return float(m.group(1))
-        except:
-          pass
-        return default
+      if df_input is not None and not df_input.empty:
+        # レース条件（例: "5R 芝1800m(良) 2歳新馬"）から各要素を安全に抽出
+        r_num_extracted = "5R"
+        dist_extracted = "芝1800m(良)"
+        cond_extracted = "2歳新馬"
 
-      if "人気" in df_input.columns:
-        df_input["人気_num"] = df_input["人気"].apply(lambda x: extract_num(x, 5.0))
-      else:
-        df_input["人気_num"] = 5.0
+        if "レース条件" in df_input.columns:
+          raw_cond = str(df_input["レース条件"].iloc[0]).strip()
+          m_r = re.search(r'(\d+R)', raw_cond)
+          if m_r:
+            r_num_extracted = m_r.group(1)
+            raw_cond = raw_cond.replace(r_num_extracted, "").strip()
+          
+          parts = raw_cond.split()
+          if len(parts) > 0:
+            dist_extracted = parts[0]
+          if len(parts) > 1:
+            cond_extracted = " ".join(parts[1:])
 
-      if "単勝オッズ" in df_input.columns:
-        df_input["オッズ_num"] = df_input["単勝オッズ"].apply(lambda x: extract_num(x, 15.0))
-      else:
-        df_input["オッズ_num"] = 15.0
+        df_input.insert(0, "日付", "2026/09/06")
+        df_input.insert(2, "レース番号", r_num_extracted)
+        df_input.insert(3, "距離・馬場", dist_extracted)
+        df_input["レース条件"] = cond_extracted
 
-      if "上がり3F" in df_input.columns:
-        df_input["上がり3F_val"] = df_input["上がり3F"].apply(lambda x: extract_num(x, 35.5))
-      else:
-        df_input["上がり3F_val"] = 35.5
+        # 人気やオッズ、上がり3Fの数値を安全に抽出
+        def extract_num(val, default=5.0):
+          try:
+            s = str(val)
+            m = re.search(r'([\d\.]+)', s)
+            if m:
+              return float(m.group(1))
+          except:
+            pass
+          return default
 
-      st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
-      
-      preview_cols = [
-          "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
-          "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
-      ]
-      available_preview = [c for c in preview_cols if c in df_input.columns]
-      st.dataframe(df_input[available_preview], use_container_width=True)
+        if "人気" in df_input.columns:
+          df_input["人気_num"] = df_input["人気"].apply(lambda x: extract_num(x, 5.0))
+        else:
+          df_input["人気_num"] = 5.0
+
+        if "単勝オッズ" in df_input.columns:
+          df_input["オッズ_num"] = df_input["単勝オッズ"].apply(lambda x: extract_num(x, 15.0))
+        else:
+          df_input["オッズ_num"] = 15.0
+
+        if "上がり3F" in df_input.columns:
+          df_input["上がり3F_val"] = df_input["上がり3F"].apply(lambda x: extract_num(x, 35.5))
+        else:
+          df_input["上がり3F_val"] = 35.5
+
+        st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
+        
+        preview_cols = [
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        available_preview = [c for c in preview_cols if c in df_input.columns]
+        st.dataframe(df_input[available_preview], use_container_width=True)
 
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
@@ -93,7 +116,7 @@ with tab1:
 
         def calc_speed_index(row):
           try:
-            val = float(row.get("スピード指数", 0))
+            val = float(row["スピード指数"])
             if val > 0:
               return val
           except:
@@ -154,8 +177,8 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if "開催地" in df_display.columns and not df_display["開催地"].empty else "阪神"
-        r_num_title = str(df_display["レース番号"].iloc[0]) if "レース番号" in df_display.columns and not df_display["レース番号"].empty else "5R"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
+        r_num_title = str(df_display["レース番号"].iloc[0]) if not df_display["レース番号"].empty else "5R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         output_cols = [
