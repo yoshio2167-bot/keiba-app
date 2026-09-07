@@ -30,19 +30,29 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      # 人気や単勝オッズの文字列（例: "2人気" -> 2, "3.9" -> 3.9）から数値部分を綺麗に抽出する処理
+      # カラム名やデータ型を安全に整えるパース処理
+      def extract_num(val, default=5.0):
+        try:
+          s = str(val)
+          m = re.search(r'([\d\.]+)', s)
+          if m:
+            return float(m.group(1))
+        except:
+          pass
+        return default
+
       if "人気" in df_input.columns:
-        df_input["人気_num"] = df_input["人気"].astype(str).str.extract(r'(\d+)').astype(float).fillna(5)
+        df_input["人気_num"] = df_input["人気"].apply(lambda x: extract_num(x, 5.0))
       else:
         df_input["人気_num"] = 5.0
 
       if "単勝オッズ" in df_input.columns:
-        df_input["オッズ_num"] = pd.to_numeric(df_input["単勝オッズ"], errors="coerce").fillna(15.0)
+        df_input["オッズ_num"] = df_input["単勝オッズ"].apply(lambda x: extract_num(x, 15.0))
       else:
         df_input["オッズ_num"] = 15.0
 
       if "上がり3F" in df_input.columns:
-        df_input["上がり3F_val"] = pd.to_numeric(df_input["上がり3F"], errors="coerce").fillna(35.5)
+        df_input["上がり3F_val"] = df_input["上がり3F"].apply(lambda x: extract_num(x, 35.5))
       else:
         df_input["上がり3F_val"] = 35.5
 
@@ -69,7 +79,6 @@ with tab1:
           recent = str(row.get("近走5走成績", "0-0-0-0"))
           wins = recent.count("1")
           base_idx += wins * 3.0
-          # 人気上位ほどベース評価を少し底上げ
           pop_bonus = max(0, (11 - row["人気_num"]) * 1.5)
           return round(max(50.0, min(100.0, base_idx + pop_bonus)), 1)
 
@@ -105,13 +114,11 @@ with tab1:
         raw_win_rate = (win_counts / n_simulations) * 100
         df_res["AI期待回収率"] = ((raw_win_rate / 100) * df_res["オッズ_num"] * 100).round(1).astype(str) + "%"
         
-        # 数値ソート用に一時的な勝率カラムを作成
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
         st.subheader("📊 100回シミュレーション・ランキング結果")
         
-        # 表示する列の整理
         display_cols = [
             "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
             "馬番", "馬名", "人気", "単勝オッズ",
@@ -122,12 +129,10 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        # ファイル名用
         kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
         r_num_title = str(df_display["レース番号"].iloc[0]) if not df_display["レース番号"].empty else "5R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
-        # CSV保存用ボタン（元のフォーマット項目順に整える）
         output_cols = [
             "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
             "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
@@ -136,12 +141,10 @@ with tab1:
             "スピード指数", "近走5走成績", "騎手", "斤量"
         ]
         
-        # 上位馬の情報をAI本命予想としてセットした書き出し用データ作成
         df_export = df_ranked.copy()
         top_h_str = f"{df_export.iloc[0]['馬番']}番 {df_export.iloc[0]['馬名']}"
         df_export.loc[0, "AI本命予想"] = top_h_str
 
-        # 足りない列があれば補う
         for c in output_cols:
           if c not in df_export.columns:
             df_export[c] = ""
@@ -156,7 +159,6 @@ with tab1:
             mime="text/csv",
         )
 
-        # スプレッドシート用一発コピーテキスト生成（全頭分をタブ区切りで生成）
         tsv_buffer = StringIO()
         df_export_final.to_csv(tsv_buffer, sep="\t", index=False)
         sim_copy_text = tsv_buffer.getvalue()
@@ -301,7 +303,6 @@ with tab2:
               f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
 
-        # ご提示いただいたスプレッドシートの並び順に完全一致させたタブ区切りテキスト
         sheet_row_text = (
             f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_1st}\t{margin_option}"
         )
