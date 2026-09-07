@@ -8,40 +8,21 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証", "🛠️ テキスト整形ツール"])
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
   st.write(
-      "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してCSVやスプレッドシート用テキストで保存できます。"
+      "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してスプレッドシート用テキストで保存できます。"
   )
 
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
       placeholder=(
-          "開催,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "阪神,芝1800m(良) 2歳新馬,1,サンプルホースA,1,4.5,先行,33.8,,1-2-1-3,川田将雅,56.0"
+          "日付,開催地,レース番号,距離・馬場,レース条件,AI本命予想,シミュ勝率,シミュ複勝率,AI期待回収率,実際の1着馬,着差・判定メモ,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
+          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,,,,,,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
       ),
-      height=150,
-  )
-
-  race_num_choice = st.selectbox(
-      "📌 レース番号を選択してください",
-      options=[
-          "1R",
-          "2R",
-          "3R",
-          "4R",
-          "5R",
-          "6R",
-          "7R",
-          "8R",
-          "9R",
-          "10R",
-          "11R",
-          "12R",
-      ],
-      index=4,  # デフォルト5R
+      height=180,
   )
 
   df_input = None
@@ -49,39 +30,21 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      # 1. 開催地の抽出
-      kaisai_val = "阪神"
-      if "開催" in df_input.columns:
-        raw_k = str(df_input["開催"].iloc[0]).strip()
-        if raw_k and raw_k != "nan":
-          for i in range(1, 13):
-            raw_k = raw_k.replace(f"{i}R", "").replace(f"第{i}R", "")
-          kaisai_val = raw_k.strip()
+      # 人気や単勝オッズの文字列（例: "2人気" -> 2, "3.9" -> 3.9）から数値部分を綺麗に抽出する処理
+      if "人気" in df_input.columns:
+        df_input["人気_num"] = df_input["人気"].astype(str).str.extract(r'(\d+)').astype(float).fillna(5)
+      else:
+        df_input["人気_num"] = 5.0
 
-      # 2. レース条件の分解（距離・馬場 と レース条件クラス名に分ける）
-      distance_track = "—"
-      race_class = "—"
-      if "レース条件" in df_input.columns:
-        raw_cond = str(df_input["レース条件"].iloc[0]).strip()
-        # 例: "芝1800m(良) 2歳新馬5R" から余分なRを掃除
-        for i in range(1, 13):
-          raw_cond = raw_cond.replace(f"{i}R", "").replace(f"第{i}R", "")
-        raw_cond = raw_cond.strip()
+      if "単勝オッズ" in df_input.columns:
+        df_input["オッズ_num"] = pd.to_numeric(df_input["単勝オッズ"], errors="coerce").fillna(15.0)
+      else:
+        df_input["オッズ_num"] = 15.0
 
-        # スペースや括弧で分割を試みる（例: "芝1800m(良)" と "2歳新馬"）
-        parts = raw_cond.split()
-        if len(parts) > 0:
-          distance_track = parts[0]
-        if len(parts) > 1:
-          race_class = " ".join(parts[1:])
-        else:
-          race_class = raw_cond
-
-      # 3. 分割した新しい項目をデータフレームに挿入
-      df_input.insert(0, "レース番号", race_num_choice)
-      df_input.insert(0, "開催地", kaisai_val)
-      df_input["距離・馬場"] = distance_track
-      df_input["詳細条件"] = race_class
+      if "上がり3F" in df_input.columns:
+        df_input["上がり3F_val"] = pd.to_numeric(df_input["上がり3F"], errors="coerce").fillna(35.5)
+      else:
+        df_input["上がり3F_val"] = 35.5
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
       st.dataframe(df_input, use_container_width=True)
@@ -93,14 +56,6 @@ with tab1:
       with st.spinner("100回の模擬レース（モンテカルロ法）を集計中..."):
         df_res = df_input.copy()
 
-        df_res["上がり3F_num"] = pd.to_numeric(
-            df_res["上がり3F"], errors="coerce"
-        ).fillna(35.0)
-        df_res["オッズ_num"] = pd.to_numeric(
-            df_res["単勝オッズ"], errors="coerce"
-        ).fillna(10.0)
-
-
         def calc_speed_index(row):
           try:
             val = float(row["スピード指数"])
@@ -109,20 +64,21 @@ with tab1:
           except:
             pass
           base_idx = 70.0
-          up_time = row["上がり3F_num"]
+          up_time = row["上がり3F_val"]
           base_idx += (37.0 - up_time) * 4.0
-          recent = str(row["近走5走成績"])
+          recent = str(row.get("近走5走成績", "0-0-0-0"))
           wins = recent.count("1")
           base_idx += wins * 3.0
-          return round(max(50.0, min(100.0, base_idx)), 1)
-
+          # 人気上位ほどベース評価を少し底上げ
+          pop_bonus = max(0, (11 - row["人気_num"]) * 1.5)
+          return round(max(50.0, min(100.0, base_idx + pop_bonus)), 1)
 
         if "スピード指数" not in df_res.columns:
           df_res["スピード指数"] = 0.0
         df_res["スピード指数"] = df_res.apply(calc_speed_index, axis=1)
 
         df_res["ベース評価"] = (
-            df_res["スピード指数"] * 0.7 + (37.0 - df_res["上がり3F_num"]) * 5.0
+            df_res["スピード指数"] * 0.7 + (37.0 - df_res["上がり3F_val"]) * 5.0
         )
 
         n_simulations = 100
@@ -143,48 +99,56 @@ with tab1:
           for p_idx in placers:
             place_counts[p_idx] += 1
 
-        df_res["100回シミュ勝率(%)"] = (
-            (win_counts / n_simulations) * 100
-        ).round(1)
-        df_res["100回シミュ複勝率(%)"] = (
-            (place_counts / n_simulations) * 100
-        ).round(1)
-        df_res["AI期待回収率(%)"] = (
-            (df_res["100回シミュ勝率(%)"] / 100) * df_res["オッズ_num"] * 100
-        ).round(1)
-        df_res["AI総合評価スコア"] = df_res["ベース評価"].round(1)
+        df_res["シミュ勝率"] = ((win_counts / n_simulations) * 100).round(1).astype(str) + "%"
+        df_res["シミュ複勝率"] = ((place_counts / n_simulations) * 100).round(1).astype(str) + "%"
+        
+        raw_win_rate = (win_counts / n_simulations) * 100
+        df_res["AI期待回収率"] = ((raw_win_rate / 100) * df_res["オッズ_num"] * 100).round(1).astype(str) + "%"
+        
+        # 数値ソート用に一時的な勝率カラムを作成
+        df_res["_win_num"] = raw_win_rate
+        df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
-        df_ranked = df_res.sort_values(
-            by="100回シミュ勝率(%)", ascending=False
-        ).reset_index(drop=True)
-
-        st.subheader("📊 100回シミュレーション・勝率＆複勝率ランキング")
+        st.subheader("📊 100回シミュレーション・ランキング結果")
+        
+        # 表示する列の整理
         display_cols = [
-            "開催地",
-            "レース番号",
-            "距離・馬場",
-            "詳細条件",
-            "馬番",
-            "馬名",
-            "人気",
-            "単勝オッズ",
-            "100回シミュ勝率(%)",
-            "100回シミュ複勝率(%)",
-            "AI期待回収率(%)",
-            "AI総合評価スコア",
-            "スピード指数",
-            "上がり3F",
-            "騎手",
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "馬番", "馬名", "人気", "単勝オッズ",
+            "シミュ勝率", "シミュ複勝率", "AI期待回収率",
+            "スピード指数", "上がり3F", "騎手"
         ]
         available_cols = [c for c in display_cols if c in df_ranked.columns]
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
+        # ファイル名用
         kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
         r_num_title = str(df_display["レース番号"].iloc[0]) if not df_display["レース番号"].empty else "5R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
-        csv_download_data = df_display.to_csv(index=False).encode("utf-8-sig")
+        # CSV保存用ボタン（元のフォーマット項目順に整える）
+        output_cols = [
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
+            "実際の1着馬", "着差・判定メモ",
+            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F",
+            "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        
+        # 上位馬の情報をAI本命予想としてセットした書き出し用データ作成
+        df_export = df_ranked.copy()
+        top_h_str = f"{df_export.iloc[0]['馬番']}番 {df_export.iloc[0]['馬名']}"
+        df_export.loc[0, "AI本命予想"] = top_h_str
+
+        # 足りない列があれば補う
+        for c in output_cols:
+          if c not in df_export.columns:
+            df_export[c] = ""
+
+        df_export_final = df_export[output_cols]
+
+        csv_download_data = df_export_final.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             label="📥 シミュレーション結果をCSVで保存",
             data=csv_download_data,
@@ -192,8 +156,9 @@ with tab1:
             mime="text/csv",
         )
 
+        # スプレッドシート用一発コピーテキスト生成（全頭分をタブ区切りで生成）
         tsv_buffer = StringIO()
-        df_display.to_csv(tsv_buffer, sep="\t", index=False)
+        df_export_final.to_csv(tsv_buffer, sep="\t", index=False)
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
@@ -202,26 +167,24 @@ with tab1:
         st.text_area(
             "シミュレーション結果コピー用ボックス",
             value=sim_copy_text,
-            height=100,
+            height=120,
         )
 
         st.subheader("🎯 おすすめAI買い目インフォ")
         top_horse = df_ranked.iloc[0]["馬名"]
         top_num = df_ranked.iloc[0]["馬番"]
-        top_win = df_ranked.iloc[0]["100回シミュ勝率(%)"]
-        top_place = df_ranked.iloc[0]["100回シミュ複勝率(%)"]
+        top_win = df_ranked.iloc[0]["シミュ勝率"]
+        top_place = df_ranked.iloc[0]["シミュ複勝率"]
 
-        df_roi_ranked = df_ranked.sort_values(
-            by="AI期待回収率(%)", ascending=False
-        )
+        df_roi_ranked = df_ranked.sort_values(by="_win_num", ascending=False)
         value_horse = df_roi_ranked.iloc[0]["馬名"]
         value_num = df_roi_ranked.iloc[0]["馬番"]
-        value_roi = df_roi_ranked.iloc[0]["AI期待回収率(%)"]
+        value_roi = df_roi_ranked.iloc[0]["AI期待回収率"]
 
         st.info(
-            f"◎ **本命推し**: {top_num}番 {top_horse} (勝率: {top_win}% / 複勝率:"
-            f" {top_place}%)\n\n★ **穴・妙味推奨**: {value_num}番"
-            f" {value_horse} (期待回収率: {value_roi}%)"
+            f"◎ **本命推し**: {top_num}番 {top_horse} (勝率: {top_win} / 複勝率:"
+            f" {top_place})\n\n★ **穴・妙味推奨**: {value_num}番"
+            f" {value_horse} (期待回収率: {value_roi})"
         )
     else:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
@@ -241,14 +204,15 @@ with tab2:
     st.success("シミュレーション結果を読み込みました！")
 
     horse_options = [
-        f"{row.get('馬番')}番 {row.get('馬名')} ({row.get('人気')}人気・{row.get('単勝オッズ')}倍)"
+        f"{row.get('馬番')}番 {row.get('馬名')} ({row.get('人気')}・単勝{row.get('単勝オッズ')}倍)"
         for _, row in df_saved.iterrows()
     ]
 
+    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026/09/06"
     kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
     r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "5R"
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
-    cond_val = str(df_saved["詳細条件"].iloc[0]) if "詳細条件" in df_saved.columns and not df_saved["詳細条件"].empty else ""
+    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
 
     st.subheader("2. 実際のレース結果を選択")
     col1, col2, col3 = st.columns(3)
@@ -290,9 +254,9 @@ with tab2:
         ai_top_num = str(ai_top_row.get("馬番"))
         ai_top_name = str(ai_top_row.get("馬名"))
         ai_top_str = f"{ai_top_num}番 {ai_top_name}"
-        ai_win_rate = ai_top_row.get("100回シミュ勝率(%)", 0)
-        ai_place_rate = ai_top_row.get("100回シミュ複勝率(%)", 0)
-        ai_roi = ai_top_row.get("AI期待回収率(%)", 0)
+        ai_win_rate = ai_top_row.get("シミュ勝率", "0%")
+        ai_place_rate = ai_top_row.get("シミュ複勝率", "0%")
+        ai_roi = ai_top_row.get("AI期待回収率", "0%")
 
         st.markdown("---")
         st.subheader("📝 検証結果レポート")
@@ -337,12 +301,9 @@ with tab2:
               f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
 
-        from datetime import datetime
-
-        today_str = datetime.now().strftime("%Y/%m/%d")
-        # スプレッドシート用に独立した列としてタブ区切りで生成
+        # ご提示いただいたスプレッドシートの並び順に完全一致させたタブ区切りテキスト
         sheet_row_text = (
-            f"{today_str}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}%\t{ai_place_rate}%\t{ai_roi}%\t{actual_1st}\t{margin_option}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_1st}\t{margin_option}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
@@ -356,3 +317,70 @@ with tab2:
     st.info(
         "まずはTab1で保存したシミュレーション結果のCSVファイルをアップロードしてください。"
     )
+
+with tab3:
+  st.header("🛠️ テキスト整形ツール")
+  st.write(
+      "ネット競馬等の出馬表テキストをここに貼り付けると、AIシミュレーション用のCSV形式へ一瞬で変換します。"
+  )
+
+  raw_txt = st.text_area(
+      "ここに生の出馬表テキストを貼り付け",
+      placeholder="例:\n1 リスグロワール 牡2 55.0 川田将雅 3.9 2人気",
+      height=150,
+  )
+
+  col_t1, col_t2, col_t3 = st.columns(3)
+  with col_t1:
+    inp_date = st.text_input("日付", value="2026/09/06")
+  with col_t2:
+    inp_kaisai = st.text_input("開催地", value="阪神")
+  with col_t3:
+    inp_rnum = st.text_input("レース番号", value="5R")
+
+  inp_dist = st.text_input("距離・馬場", value="芝1800m(良)")
+  inp_cond = st.text_input("レース条件", value="2歳新馬")
+
+  if st.button("✨ 指定フォーマットのCSVに変換する"):
+    if raw_txt:
+      lines = raw_txt.strip().split("\n")
+      parsed_rows = []
+      for line in lines:
+        parts = line.strip().split()
+        if len(parts) >= 2:
+          umaban = parts[0]
+          ubana = parts[1]
+          kishu = parts[2] if len(parts) > 2 else "レーン"
+          parsed_rows.append({
+              "日付": inp_date,
+              "開催地": inp_kaisai,
+              "レース番号": inp_rnum,
+              "距離・馬場": inp_dist,
+              "レース条件": inp_cond,
+              "AI本命予想": "",
+              "シミュ勝率": "",
+              "シミュ複勝率": "",
+              "AI期待回収率": "",
+              "実際の1着馬": "",
+              "着差・判定メモ": "",
+              "馬番": umaban,
+              "馬名": ubana,
+              "人気": "",
+              "単勝オッズ": "",
+              "脚質": "差し",
+              "上がり3F": "",
+              "スピード指数": "",
+              "近走5走成績": "0-0-0-0",
+              "騎手": kishu,
+              "斤量": 55.0,
+          })
+
+      if parsed_rows:
+        df_converted = pd.DataFrame(parsed_rows)
+        csv_text = df_converted.to_csv(index=False)
+        st.success("変換が完了しました！下のボックスをコピーしてTab1に貼り付けてください。")
+        st.text_area("変換済みCSV出力", value=csv_text, height=150)
+      else:
+        st.warning("有効な行が見つかりませんでした。")
+    else:
+      st.warning("テキストが入力されていません。")
