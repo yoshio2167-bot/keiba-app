@@ -19,8 +19,7 @@ with tab1:
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
       placeholder=(
-          "開催地,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "阪神,5R 芝1800m(良) 2歳新馬,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
+          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,,,,,,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
       ),
       height=180,
   )
@@ -28,33 +27,28 @@ with tab1:
   df_input = None
   if pasted_data:
     try:
-      df_input = pd.read_csv(StringIO(pasted_data))
+      # ヘッダー行の有無を自動判定して安全に読み込む処理
+      first_line = pasted_data.strip().split("\n")[0]
+      has_header = "馬番" in first_line or "馬名" in first_line or "日付" in first_line
 
-      # レース条件（例: "5R 芝1800m(良) 2歳新馬"）からレース番号、距離、詳細条件を綺麗に分解・整理する
-      r_num_extracted = "5R"
-      dist_extracted = "芝1800m(良)"
-      cond_extracted = "2歳新馬"
+      if has_header:
+        df_input = pd.read_csv(StringIO(pasted_data))
+      else:
+        # ヘッダーがない場合は自動で列名を割り当てる
+        expected_cols = [
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
+            "実際の1着馬", "着差・判定メモ",
+            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F",
+            "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        df_input = pd.read_csv(StringIO(pasted_data), header=None)
+        if len(df_input.columns) == len(expected_cols):
+          df_input.columns = expected_cols
+        else:
+          # 列数が異なる場合でも後ろから合わせて安全にマッピング
+          df_input.columns = [f"col_{i}" for i in range(len(df_input.columns))]
 
-      if "レース条件" in df_input.columns:
-        raw_cond = str(df_input["レース条件"].iloc[0]).strip()
-        # レース番号（◯R）を抽出
-        m_r = re.search(r'(\d+R)', raw_cond)
-        if m_r:
-          r_num_extracted = m_r.group(1)
-          raw_cond = raw_cond.replace(r_num_extracted, "").strip()
-        
-        parts = raw_cond.split()
-        if len(parts) > 0:
-          dist_extracted = parts[0]
-        if len(parts) > 1:
-          cond_extracted = " ".join(parts[1:])
-
-      df_input.insert(0, "日付", "2026/09/06")
-      df_input.insert(2, "レース番号", r_num_extracted)
-      df_input.insert(3, "距離・馬場", dist_extracted)
-      df_input["レース条件"] = cond_extracted
-
-      # 内部計算用の数値抽出
       def extract_num(val, default=5.0):
         try:
           s = str(val)
@@ -99,7 +93,7 @@ with tab1:
 
         def calc_speed_index(row):
           try:
-            val = float(row["スピード指数"])
+            val = float(row.get("スピード指数", 0))
             if val > 0:
               return val
           except:
@@ -160,8 +154,8 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
-        r_num_title = str(df_display["レース番号"].iloc[0]) if not df_display["レース番号"].empty else "5R"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if "開催地" in df_display.columns and not df_display["開催地"].empty else "阪神"
+        r_num_title = str(df_display["レース番号"].iloc[0]) if "レース番号" in df_display.columns and not df_display["レース番号"].empty else "5R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         output_cols = [
@@ -397,7 +391,6 @@ with tab3:
 
       if parsed_rows:
         df_converted = pd.DataFrame(parsed_rows)
-        # プレビュー用のヘッダー順
         cols_order = [
             "開催地", "レース条件", "馬番", "馬名", "人気", "単勝オッズ",
             "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
