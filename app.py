@@ -19,8 +19,8 @@ with tab1:
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
       placeholder=(
-          "開催地,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "阪神,5R 芝1800m(良) 2歳新馬,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
+          "日付,開催地,レース番号,距離・馬場,レース条件,AI本命予想,シミュ勝率,シミュ複勝率,AI期待回収率,実際の1着馬,着差・判定メモ,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
+          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,,,,,,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
       ),
       height=180,
   )
@@ -28,53 +28,29 @@ with tab1:
   df_input = None
   if pasted_data:
     try:
-      # 1. データのクレンジングと読み込み
       lines = [line.strip() for line in pasted_data.strip().split("\n") if line.strip()]
       if len(lines) > 0:
-        # 1行目がヘッダーかどうかを判定
-        first_line = lines[0]
-        if "開催地" in first_line or "馬番" in first_line or "馬名" in first_line:
-          csv_io = StringIO("\n".join(lines))
-          df_input = pd.read_csv(csv_io)
-        else:
-          # ヘッダーがない場合は正しいカラム名を付与して読み込む
-          cols = [
-              "開催地", "レース条件", "馬番", "馬名", "人気", "単勝オッズ",
-              "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
-          ]
-          csv_io = StringIO("\n".join(lines))
-          df_input = pd.read_csv(csv_io, header=None)
-          if len(df_input.columns) == len(cols):
-            df_input.columns = cols
+        csv_io = StringIO("\n".join(lines))
+        df_input = pd.read_csv(csv_io)
 
       if df_input is not None and not df_input.empty:
-        # レース条件（例: "5R 芝1800m(良) 2歳新馬"）から各要素を安全に抽出
-        r_num_extracted = "5R"
-        dist_extracted = "芝1800m(良)"
-        cond_extracted = "2歳新馬"
+        # 必須カラムが万が一欠けていても安全にデフォルト値で補う処理
+        expected_cols = [
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
+            "実際の1着馬", "着差・判定メモ",
+            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F",
+            "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        for col in expected_cols:
+          if col not in df_input.columns:
+            df_input[col] = ""
 
-        if "レース条件" in df_input.columns:
-          raw_cond = str(df_input["レース条件"].iloc[0]).strip()
-          m_r = re.search(r'(\d+R)', raw_cond)
-          if m_r:
-            r_num_extracted = m_r.group(1)
-            raw_cond = raw_cond.replace(r_num_extracted, "").strip()
-          
-          parts = raw_cond.split()
-          if len(parts) > 0:
-            dist_extracted = parts[0]
-          if len(parts) > 1:
-            cond_extracted = " ".join(parts[1:])
-
-        df_input.insert(0, "日付", "2026/09/06")
-        df_input.insert(2, "レース番号", r_num_extracted)
-        df_input.insert(3, "距離・馬場", dist_extracted)
-        df_input["レース条件"] = cond_extracted
-
-        # 人気やオッズ、上がり3Fの数値を安全に抽出
         def extract_num(val, default=5.0):
           try:
             s = str(val)
+            if s == "nan" or not s.strip():
+              return default
             m = re.search(r'([\d\.]+)', s)
             if m:
               return float(m.group(1))
@@ -82,20 +58,10 @@ with tab1:
             pass
           return default
 
-        if "人気" in df_input.columns:
-          df_input["人気_num"] = df_input["人気"].apply(lambda x: extract_num(x, 5.0))
-        else:
-          df_input["人気_num"] = 5.0
-
-        if "単勝オッズ" in df_input.columns:
-          df_input["オッズ_num"] = df_input["単勝オッズ"].apply(lambda x: extract_num(x, 15.0))
-        else:
-          df_input["オッズ_num"] = 15.0
-
-        if "上がり3F" in df_input.columns:
-          df_input["上がり3F_val"] = df_input["上がり3F"].apply(lambda x: extract_num(x, 35.5))
-        else:
-          df_input["上がり3F_val"] = 35.5
+        df_input["人気_num"] = df_input["人気"].apply(lambda x: extract_num(x, 5.0))
+        df_input["オッズ_num"] = df_input["単勝オッズ"].apply(lambda x: extract_num(x, 15.0))
+        df_input["上がり3F_val"] = df_input["上がり3F"].apply(lambda x: extract_num(x, 35.5))
+        df_input["speed_val"] = df_input["スピード指数"].apply(lambda x: extract_num(x, 0.0))
 
         st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
         
@@ -116,26 +82,24 @@ with tab1:
 
         def calc_speed_index(row):
           try:
-            val = float(row["スピード指数"])
+            val = float(row["speed_val"])
             if val > 0:
               return val
           except:
             pass
           base_idx = 70.0
-          up_time = row["上がり3F_val"]
+          up_time = float(row["上がり3F_val"])
           base_idx += (37.0 - up_time) * 4.0
           recent = str(row.get("近走5走成績", "0-0-0-0"))
           wins = recent.count("1")
           base_idx += wins * 3.0
-          pop_bonus = max(0, (11 - row["人気_num"]) * 1.5)
+          pop_bonus = max(0, (11 - float(row["人気_num"])) * 1.5)
           return round(max(50.0, min(100.0, base_idx + pop_bonus)), 1)
 
-        if "スピード指数" not in df_res.columns:
-          df_res["スピード指数"] = 0.0
-        df_res["スピード指数"] = df_res.apply(calc_speed_index, axis=1)
+        df_res["スピード指数_calc"] = df_res.apply(calc_speed_index, axis=1)
 
         df_res["ベース評価"] = (
-            df_res["スピード指数"] * 0.7 + (37.0 - df_res["上がり3F_val"]) * 5.0
+            df_res["スピード指数_calc"] * 0.7 + (37.0 - df_res["上がり3F_val"]) * 5.0
         )
 
         n_simulations = 100
@@ -171,7 +135,7 @@ with tab1:
             "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
             "馬番", "馬名", "人気", "単勝オッズ",
             "シミュ勝率", "シミュ複勝率", "AI期待回収率",
-            "スピード指数", "上がり3F", "騎手"
+            "上がり3F", "騎手"
         ]
         available_cols = [c for c in display_cols if c in df_ranked.columns]
         df_display = df_ranked[available_cols]
@@ -398,8 +362,17 @@ with tab3:
           ubana = parts[1]
           kishu = parts[2] if len(parts) > 2 else "レーン"
           parsed_rows.append({
+              "日付": inp_date,
               "開催地": inp_kaisai,
-              "レース条件": inp_cond_full,
+              "レース番号": "5R",
+              "距離・馬場": "芝1800m(良)",
+              "レース条件": "2歳新馬",
+              "AI本命予想": "",
+              "シミュ勝率": "",
+              "シミュ複勝率": "",
+              "AI期待回収率": "",
+              "実際の1着馬": "",
+              "着差・判定メモ": "",
               "馬番": umaban,
               "馬名": ubana,
               "人気": "",
@@ -415,7 +388,10 @@ with tab3:
       if parsed_rows:
         df_converted = pd.DataFrame(parsed_rows)
         cols_order = [
-            "開催地", "レース条件", "馬番", "馬名", "人気", "単勝オッズ",
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "AI本命予想", "シミュ勝率", "シミュ複勝率", "AI期待回収率",
+            "実際の1着馬", "着差・判定メモ",
+            "馬番", "馬名", "人気", "単勝オッズ",
             "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
         ]
         csv_text = df_converted[cols_order].to_csv(index=False)
