@@ -8,7 +8,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証", "🛠️ テキスト整形ツール"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証", "🛠️ Geminiテキスト・スクショ整形"])
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション")
@@ -20,7 +20,7 @@ with tab1:
       "CSVデータ貼り付け欄",
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,1,リスグロワール,2人気,3.9,差,,,,0,レーン,55.0"
+          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,1,リスグロワール,2人気,3.9,差,,,,0-0-0-0,レーン,55.0"
       ),
       height=180,
   )
@@ -43,17 +43,24 @@ with tab1:
 
         parsed_rows = []
         for l in data_lines:
-          parts = l.split(",")
+          parts = [p.strip() for p in l.split(",")]
           row_dict = {}
-          for i, col_name in enumerate(target_cols):
-            if i < len(parts):
-              val = parts[i].strip()
-              # 新馬戦などで近走成績が空欄やハイフンの場合は「0」に補正
-              if col_name == "近走5走成績" and (not val or val == "-"):
-                val = "0"
-              row_dict[col_name] = val
-            else:
-              row_dict[col_name] = "0" if col_name == "近走5走成績" else ""
+          row_dict["斤量"] = parts[-1] if len(parts) >= 1 else "55.0"
+          row_dict["騎手"] = parts[-2] if len(parts) >= 2 else "レーン"
+          row_dict["近走5走成績"] = parts[-3] if len(parts) >= 3 and parts[-3] else "0-0-0-0"
+          row_dict["スピード指数"] = parts[-4] if len(parts) >= 4 else ""
+          row_dict["上がり3F"] = parts[-5] if len(parts) >= 5 else ""
+          row_dict["脚質"] = parts[-6] if len(parts) >= 6 else "差"
+          row_dict["単勝オッズ"] = parts[-7] if len(parts) >= 7 else "10.0"
+          row_dict["人気"] = parts[-8] if len(parts) >= 8 else "5人気"
+          row_dict["馬名"] = parts[-9] if len(parts) >= 9 else ""
+          row_dict["馬番"] = parts[-10] if len(parts) >= 10 else "1"
+          row_dict["レース条件"] = parts[-11] if len(parts) >= 11 else "2歳新馬"
+          row_dict["距離・馬場"] = parts[-12] if len(parts) >= 12 else "芝1800m(良)"
+          row_dict["レース番号"] = parts[-13] if len(parts) >= 13 else "5R"
+          row_dict["開催地"] = parts[-14] if len(parts) >= 14 else "阪神"
+          row_dict["日付"] = parts[-15] if len(parts) >= 15 else "2026/09/06"
+
           parsed_rows.append(row_dict)
 
         df_input = pd.DataFrame(parsed_rows)
@@ -103,8 +110,7 @@ with tab1:
           base_idx = 70.0
           up_time = float(row["上がり3F_val"])
           base_idx += (37.0 - up_time) * 4.0
-          recent = str(row.get("近走5走成績", "0"))
-          # 「0」や新馬の場合は勝ち数カウントしない
+          recent = str(row.get("近走5走成績", "0-0-0-0"))
           wins = 0 if recent in ["0", "新馬", ""] else recent.count("1")
           base_idx += wins * 3.0
           pop_bonus = max(0, (11 - float(row["人気_num"])) * 1.5)
@@ -201,7 +207,7 @@ with tab1:
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
-            "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
+            "### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）"
         )
         st.text_area(
             "シミュレーション結果コピー用ボックス",
@@ -357,37 +363,65 @@ with tab2:
     )
 
 with tab3:
-  st.header("🛠️ テキスト整形ツール")
+  st.header("🛠️ Geminiテキスト・スクショ整形ツール")
   st.write(
-      "ネット競馬等の出馬表テキストをここに貼り付けると、AIシミュレーション用のCSV形式へ一瞬で変換します。"
+      "ネット競馬やGeminiでOCR（文字起こし）した生の出馬表テキストをここに貼り付けると、アプリが自動で解析して正しい15列のCSVに一瞬で整形します。"
   )
 
   raw_txt = st.text_area(
-      "ここに生の出馬表テキストを貼り付け",
-      placeholder="例:\n1 リスグロワール 牡2 55.0 川田将雅 3.9 2人気",
+      "ここにGeminiの文字起こしテキスト等をそのまま貼り付け",
+      placeholder="例:\n1 リスグロワール 牡2 55.0 川田将雅 3.9 2人気 差",
       height=150,
   )
 
   col_t1, col_t2 = st.columns(2)
   with col_t1:
-    inp_date = st.text_input("日付", value="2026/09/06")
+    inp_date = st.text_input("基本設定：日付", value="2026/09/06")
   with col_t2:
-    inp_kaisai = st.text_input("開催地", value="阪神")
+    inp_kaisai = st.text_input("基本設定：開催地", value="阪神")
 
-  inp_rnum = st.text_input("レース番号", value="5R")
-  inp_dist = st.text_input("距離・馬場", value="芝1800m(良)")
-  inp_cond = st.text_input("レース条件", value="2歳新馬")
+  col_t3, col_t4, col_t5 = st.columns(3)
+  with col_t3:
+    inp_rnum = st.text_input("レース番号", value="5R")
+  with col_t4:
+    inp_dist = st.text_input("距離・馬場", value="芝1800m(良)")
+  with col_t5:
+    inp_cond = st.text_input("レース条件", value="2歳新馬")
 
-  if st.button("✨ 指定フォーマットのCSVに変換する"):
+  if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = raw_txt.strip().split("\n")
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
-        parts = line.strip().split()
-        if len(parts) >= 2:
-          umaban = parts[0]
-          ubana = parts[1]
-          kishu = parts[2] if len(parts) > 2 else "レーン"
+        # スペースやタブ、カンマで区切られたトークンを綺麗に分解
+        tokens = re.split(r'[\s,\t]+', line)
+        if len(tokens) >= 2:
+          # 馬番と馬名を推測抽出
+          umaban = tokens[0]
+          ubana = tokens[1]
+          
+          # 残りのトークンからオッズや人気、騎手を賢く拾い出す
+          odds = "10.0"
+          ninki = "5人気"
+          kishu = "レーン"
+          kinryo = "55.0"
+          kyakushitsu = "差"
+
+          for t in tokens[2:]:
+            if re.search(r'^\d+\.?\d*$', t) and float(t) < 300 and "." in t:
+              odds = t
+            elif "人気" in t or (t.isdigit() and int(t) <= 18):
+              if "人気" in t:
+                ninki = t
+            elif t in ["逃", "先行", "差", "追"]:
+              kyakushitsu = t
+            elif re.search(r'^\d{2}\.\d$', t):
+              pass # 上がりタイム等
+            elif re.search(r'^\d{2}\.\d$', t) == None and len(t) >= 2 and not t.isdigit():
+              kishu = t
+            elif re.search(r'^\d{2}\.\d$', t) == None and (t.replace('.', '', 1).isdigit() and float(t) >= 48 and float(t) <= 60):
+              kinryo = t
+
           parsed_rows.append({
               "日付": inp_date,
               "開催地": inp_kaisai,
@@ -396,14 +430,14 @@ with tab3:
               "レース条件": inp_cond,
               "馬番": umaban,
               "馬名": ubana,
-              "人気": "",
-              "単勝オッズ": "",
-              "脚質": "差",
+              "人気": ninki,
+              "単勝オッズ": odds,
+              "脚質": kyakushitsu,
               "上がり3F": "",
               "スピード指数": "",
-              "近走5走成績": "0",
+              "近走5走成績": "0-0-0-0",
               "騎手": kishu,
-              "斤量": 55.0,
+              "斤量": kinryo,
           })
 
       if parsed_rows:
@@ -415,8 +449,8 @@ with tab3:
         ]
         csv_text = df_converted[cols_order].to_csv(index=False)
         st.success("変換が完了しました！下のボックスをコピーしてTab1に貼り付けてください。")
-        st.text_area("変換済みCSV出力", value=csv_text, height=150)
+        st.text_area("整形済みCSV出力（ワンタップ選択）", value=csv_text, height=150)
       else:
-        st.warning("有効な行が見つかりませんでした。")
+        st.warning("有効な行が見つかりませんでした。テキストの形式を確認してください。")
     else:
       st.warning("テキストが入力されていません。")
