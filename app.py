@@ -19,8 +19,8 @@ with tab1:
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
       placeholder=(
-          "日付,開催地,レース番号,距離・馬場,レース条件,AI本命予想,シミュ勝率,シミュ複勝率,AI期待回収率,実際の1着馬,着差・判定メモ,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,,,,,,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
+          "開催地,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
+          "阪神,5R 芝1800m(良) 2歳新馬,1,リスグロワール,2人気,3.9,,,,0-0-0-0,レーン,55.0"
       ),
       height=180,
   )
@@ -30,7 +30,31 @@ with tab1:
     try:
       df_input = pd.read_csv(StringIO(pasted_data))
 
-      # カラム名やデータ型を安全に整えるパース処理
+      # レース条件（例: "5R 芝1800m(良) 2歳新馬"）からレース番号、距離、詳細条件を綺麗に分解・整理する
+      r_num_extracted = "5R"
+      dist_extracted = "芝1800m(良)"
+      cond_extracted = "2歳新馬"
+
+      if "レース条件" in df_input.columns:
+        raw_cond = str(df_input["レース条件"].iloc[0]).strip()
+        # レース番号（◯R）を抽出
+        m_r = re.search(r'(\d+R)', raw_cond)
+        if m_r:
+          r_num_extracted = m_r.group(1)
+          raw_cond = raw_cond.replace(r_num_extracted, "").strip()
+        
+        parts = raw_cond.split()
+        if len(parts) > 0:
+          dist_extracted = parts[0]
+        if len(parts) > 1:
+          cond_extracted = " ".join(parts[1:])
+
+      df_input.insert(0, "日付", "2026/09/06")
+      df_input.insert(2, "レース番号", r_num_extracted)
+      df_input.insert(3, "距離・馬場", dist_extracted)
+      df_input["レース条件"] = cond_extracted
+
+      # 内部計算用の数値抽出
       def extract_num(val, default=5.0):
         try:
           s = str(val)
@@ -57,7 +81,14 @@ with tab1:
         df_input["上がり3F_val"] = 35.5
 
       st.success(f"データを正常に読み込みました（全 {len(df_input)} 頭登録中）")
-      st.dataframe(df_input, use_container_width=True)
+      
+      preview_cols = [
+          "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+          "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+      ]
+      available_preview = [c for c in preview_cols if c in df_input.columns]
+      st.dataframe(df_input[available_preview], use_container_width=True)
+
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
@@ -331,16 +362,13 @@ with tab3:
       height=150,
   )
 
-  col_t1, col_t2, col_t3 = st.columns(3)
+  col_t1, col_t2 = st.columns(2)
   with col_t1:
     inp_date = st.text_input("日付", value="2026/09/06")
   with col_t2:
     inp_kaisai = st.text_input("開催地", value="阪神")
-  with col_t3:
-    inp_rnum = st.text_input("レース番号", value="5R")
 
-  inp_dist = st.text_input("距離・馬場", value="芝1800m(良)")
-  inp_cond = st.text_input("レース条件", value="2歳新馬")
+  inp_cond_full = st.text_input("レース条件全体（例: 5R 芝1800m(良) 2歳新馬）", value="5R 芝1800m(良) 2歳新馬")
 
   if st.button("✨ 指定フォーマットのCSVに変換する"):
     if raw_txt:
@@ -353,17 +381,8 @@ with tab3:
           ubana = parts[1]
           kishu = parts[2] if len(parts) > 2 else "レーン"
           parsed_rows.append({
-              "日付": inp_date,
               "開催地": inp_kaisai,
-              "レース番号": inp_rnum,
-              "距離・馬場": inp_dist,
-              "レース条件": inp_cond,
-              "AI本命予想": "",
-              "シミュ勝率": "",
-              "シミュ複勝率": "",
-              "AI期待回収率": "",
-              "実際の1着馬": "",
-              "着差・判定メモ": "",
+              "レース条件": inp_cond_full,
               "馬番": umaban,
               "馬名": ubana,
               "人気": "",
@@ -378,7 +397,12 @@ with tab3:
 
       if parsed_rows:
         df_converted = pd.DataFrame(parsed_rows)
-        csv_text = df_converted.to_csv(index=False)
+        # プレビュー用のヘッダー順
+        cols_order = [
+            "開催地", "レース条件", "馬番", "馬名", "人気", "単勝オッズ",
+            "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        csv_text = df_converted[cols_order].to_csv(index=False)
         st.success("変換が完了しました！下のボックスをコピーしてTab1に貼り付けてください。")
         st.text_area("変換済みCSV出力", value=csv_text, height=150)
       else:
