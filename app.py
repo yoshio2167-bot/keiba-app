@@ -180,7 +180,9 @@ with tab1:
               "シミュ勝率": row["シミュ勝率_str"],
               "シミュ複勝率": row["シミュ複勝率_str"],
               "AI期待回収率": row["AI期待回収率_str"],
-              "実際の1〜3着": "",
+              "実際の1着馬": "",
+              "実際の2着馬": "",
+              "実際の3着馬": "",
               "自動判定メモ": "",
               "馬番": row["馬番"],
               "馬名": row["馬名"],
@@ -309,7 +311,7 @@ with tab2:
           auto_memo = "完璧的中（上位3頭がすべて馬券内独占）"
           badge_type = "success"
         elif hit_count >= 1:
-          auto_memo = f"的中（上位3頭から {hit_count}頭が馬券内絡み）: " + ", ".join(hit_horses)
+          auto_memo = f"的中（上位3頭から {hit_count}頭が馬券内絡み）"
           badge_type = "success"
         else:
           auto_memo = "不格外れ（上位3頭がすべて馬券外）"
@@ -335,8 +337,7 @@ with tab2:
         else:
           st.warning(f"❌ **【自動判定】 {auto_memo}**")
 
-        # スプレッドシート用：実際の1着馬、2着馬、3着馬、自動判定メモをそれぞれの列（別タブ）に綺麗に割り振る
-        # 列構成: 日付, 開催地, レース番号, 距離・馬場, レース条件, AI上位3頭予想, シミュ勝率, シミュ複勝率, AI期待回収率, 実際の1着馬, 実際の2着馬, 実際の3着馬, 自動判定メモ
+        # スプレッドシート用：実際の1着、2着、3着、自動判定メモをそれぞれ独立したセル（別タブ・別列）に配置
         sheet_row_text = (
             f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t{win_rate_val}\t{place_rate_val}\t{roi_val}\t{actual_1st}\t{actual_2nd}\t{actual_3rd}\t{auto_memo}"
         )
