@@ -20,7 +20,7 @@ with tab1:
       "CSVデータ貼り付け欄",
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/06,阪神,5R,芝1800m(良),2歳新馬,1,リスグロワール,2人気,3.9,差,,,,0-0-0-0,レーン,55.0"
+          "2026/09/06,中山,12R,芝1200m(雨 稍重),3歳上1勝クラス,1,ショウナンアキツ,12人気,59.3,差,,,,0-0-0-0,石橋脩,58.0"
       ),
       height=180,
   )
@@ -55,10 +55,10 @@ with tab1:
           row_dict["人気"] = parts[-8] if len(parts) >= 8 else "5人気"
           row_dict["馬名"] = parts[-9] if len(parts) >= 9 else ""
           row_dict["馬番"] = parts[-10] if len(parts) >= 10 else "1"
-          row_dict["レース条件"] = parts[-11] if len(parts) >= 11 else "2歳新馬"
-          row_dict["距離・馬場"] = parts[-12] if len(parts) >= 12 else "芝1800m(良)"
-          row_dict["レース番号"] = parts[-13] if len(parts) >= 13 else "5R"
-          row_dict["開催地"] = parts[-14] if len(parts) >= 14 else "阪神"
+          row_dict["レース条件"] = parts[-11] if len(parts) >= 11 else "3歳上1勝クラス"
+          row_dict["距離・馬場"] = parts[-12] if len(parts) >= 12 else "芝1200m(雨 稍重)"
+          row_dict["レース番号"] = parts[-13] if len(parts) >= 13 else "12R"
+          row_dict["開催地"] = parts[-14] if len(parts) >= 14 else "中山"
           row_dict["日付"] = parts[-15] if len(parts) >= 15 else "2026/09/06"
 
           parsed_rows.append(row_dict)
@@ -159,11 +159,10 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
-        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "5R"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "中山"
+        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "12R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
-        # AIの上位3頭の文字列を作成
         top1_str = f"◎{df_ranked.iloc[0]['馬番']}番 {df_ranked.iloc[0]['馬名']}" if len(df_ranked) > 0 else ""
         top2_str = f"〇{df_ranked.iloc[1]['馬番']}番 {df_ranked.iloc[1]['馬名']}" if len(df_ranked) > 1 else ""
         top3_str = f"▲{df_ranked.iloc[2]['馬番']}番 {df_ranked.iloc[2]['馬名']}" if len(df_ranked) > 2 else ""
@@ -243,12 +242,11 @@ with tab2:
     ]
 
     date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026/09/06"
-    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
-    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "5R"
-    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
-    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
+    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "中山"
+    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "12R"
+    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(雨 稍重)"
+    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "3歳上1勝クラス"
 
-    # AIの上位3頭（1位、2位、3位）の馬番と馬名を抽出
     ai_top3_list = []
     for i in range(min(3, len(df_saved))):
       h_num = str(df_saved.iloc[i].get("馬番"))
@@ -285,7 +283,6 @@ with tab2:
       if actual_1st == "選択してください" or actual_2nd == "選択してください" or actual_3rd == "選択してください":
         st.warning("実際の1着〜3着馬すべてを選択してください。")
       else:
-        # 馬番を抽出し、実際の3着以内馬のリストを作成
         def get_umaban(sel_str):
           m = re.match(r"^(\d+)番", sel_str.strip())
           return m.group(1) if m else ""
@@ -296,10 +293,6 @@ with tab2:
             get_umaban(actual_3rd)
         ]
 
-        # AI上位3頭の馬番リスト
-        ai_nums = [item["num"] for item in ai_top3_list]
-
-        # 実際の3着以内にAIの上位3頭が何頭絡んでいるかを自動カウント
         hit_horses = []
         for item in ai_top3_list:
           if item["num"] in actual_nums:
@@ -307,7 +300,6 @@ with tab2:
 
         hit_count = len(hit_horses)
 
-        # 自動判定のステータス生成
         if hit_count == 3:
           auto_memo = "完璧的中（上位3頭がすべて馬券内独占）"
           badge_type = "success"
@@ -364,7 +356,7 @@ with tab3:
 
   raw_txt = st.text_area(
       "ここにGeminiの文字起こしテキスト等をそのまま貼り付け",
-      placeholder="例:\n1 リスグロワール 牡2 55.0 川田将雅 3.9 2人気 差",
+      placeholder="例:\n1 ショウナンアキツ 牡5 58.0 石橋脩 59.3 12人気 差",
       height=150,
   )
 
@@ -372,15 +364,15 @@ with tab3:
   with col_t1:
     inp_date = st.text_input("基本設定：日付", value="2026/09/06")
   with col_t2:
-    inp_kaisai = st.text_input("基本設定：開催地", value="阪神")
+    inp_kaisai = st.text_input("基本設定：開催地", value="中山")
 
   col_t3, col_t4, col_t5 = st.columns(3)
   with col_t3:
-    inp_rnum = st.text_input("レース番号", value="5R")
+    inp_rnum = st.text_input("レース番号", value="12R")
   with col_t4:
-    inp_dist = st.text_input("距離・馬場", value="芝1800m(良)")
+    inp_dist = st.text_input("距離・馬場", value="芝1200m(雨 稍重)")
   with col_t5:
-    inp_cond = st.text_input("レース条件", value="2歳新馬")
+    inp_cond = st.text_input("レース条件", value="3歳上1勝クラス")
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
@@ -394,8 +386,8 @@ with tab3:
           
           odds = "10.0"
           ninki = "5人気"
-          kishu = "レーン"
-          kinryo = "55.0"
+          kishu = "石橋脩"
+          kinryo = "58.0"
           kyakushitsu = "差"
 
           for t in tokens[2:]:
