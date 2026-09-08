@@ -11,9 +11,9 @@ st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・自動判定検証", "🛠️ Geminiテキスト・スクショ整形"])
 
 with tab1:
-  st.header("100回モンテカルロ・シミュレーション（改良版）")
+  st.header("100回モンテカルロ・シミュレーション（厳選・絞り込み版）")
   st.write(
-      "出馬表CSVを貼り付けると、オッズと実力を反映した100回の模擬レースを実行し、勝率・複勝率・回収率を算出してスプレッドシート用テキストで保存できます。"
+      "出馬表CSVを貼り付けると、オッズと実力を反映した模擬レースを実行し、ヤキトリを防ぐ『期待回収率フィルター＆ワイド2点（厳選勝負）』を算出してスプレッドシート用テキストで保存できます。"
   )
 
   pasted_data = st.text_area(
@@ -34,12 +34,6 @@ with tab1:
         has_header = "馬番" in first_line or "馬名" in first_line or "日付" in first_line
         
         data_lines = lines[1:] if has_header else lines
-
-        target_cols = [
-            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
-            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F",
-            "スピード指数", "近走5走成績", "騎手", "斤量"
-        ]
 
         parsed_rows = []
         for l in data_lines:
@@ -95,7 +89,7 @@ with tab1:
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 100回シミュレーション＆予想実行", type="primary"):
+  if st.button("🚀 100回シミュレーション＆厳選予想実行", type="primary"):
     if df_input is not None and not df_input.empty:
       with st.spinner("100回の模擬レース（モンテカルロ法）を集計中..."):
         df_res = df_input.copy()
@@ -163,10 +157,25 @@ with tab1:
         r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "12R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
-        top1_str = f"◎{df_ranked.iloc[0]['馬番']}番 {df_ranked.iloc[0]['馬名']}" if len(df_ranked) > 0 else ""
-        top2_str = f"〇{df_ranked.iloc[1]['馬番']}番 {df_ranked.iloc[1]['馬名']}" if len(df_ranked) > 1 else ""
-        top3_str = f"▲{df_ranked.iloc[2]['馬番']}番 {df_ranked.iloc[2]['馬名']}" if len(df_ranked) > 2 else ""
+        top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
+        top2 = df_ranked.iloc[1] if len(df_ranked) > 1 else None
+        top3 = df_ranked.iloc[2] if len(df_ranked) > 2 else None
+
+        top1_str = f"◎{top1['馬番']}番 {top1['馬名']}" if top1 is not None else ""
+        top2_str = f"〇{top2['馬番']}番 {top2['馬名']}" if top2 is not None else ""
+        top3_str = f"▲{top3['馬番']}番 {top3['馬名']}" if top3 is not None else ""
         ai_top3_combined = f"{top1_str} / {top2_str} / {top3_str}"
+
+        # 厳選ワイド2点（◎-〇, ◎-▲）
+        wide_1 = f"◎{top1['馬番']} - 〇{top2['馬番']}" if top1 is not None and top2 is not None else ""
+        wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
+        strict_buy_focus = f"【厳選ワイド2点】 {wide_1} / {wide_2}"
+
+        # 期待回収率の数値判定（150%以上なら勝負推奨）
+        try:
+          roi_val_num = float(str(top1["AI期待回収率_str"]).replace("%", ""))
+        except:
+          roi_val_num = 100.0
 
         export_rows = []
         for _, row in df_ranked.iterrows():
@@ -215,8 +224,11 @@ with tab1:
         )
         st.code(sim_copy_text, language="text")
 
-        st.subheader("🎯 おすすめAI買い目インフォ")
-        st.info(f"**【AI上位3頭推奨】**\n\n{ai_top3_combined}")
+        st.subheader("🎯 厳選おすすめ買い目インフォ（ヤキトリ防止・点数絞り込み）")
+        if roi_val_num >= 150.0:
+          st.success(f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']}）**\n\n{strict_buy_focus}\n\n※AI上位3頭のポテンシャルが高いため、ワイド2点に絞って効率よく回収を狙えます。")
+        else:
+          st.warning(f"⚠️ **【見送り・注意レース】（期待回収率: {top1['AI期待回収率_str']}）**\n\n{strict_buy_focus}\n\n※期待回収率が控えめなため、点数を抑えるかパス（見送り）も有効な選択肢です。")
     else:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
 
@@ -303,10 +315,10 @@ with tab2:
 
         hit_count = len(hit_horses)
 
-        if hit_count == 3:
-          auto_memo = "完璧的中（上位3頭がすべて馬券内独占）"
+        if hit_count >= 2:
+          auto_memo = f"的中（上位3頭から {hit_count}頭が馬券内絡み・ワイド的中圏内）"
           badge_type = "success"
-        elif hit_count >= 1:
+        elif hit_count == 1:
           auto_memo = f"的中（上位3頭から {hit_count}頭が馬券内絡み）"
           badge_type = "success"
         else:
