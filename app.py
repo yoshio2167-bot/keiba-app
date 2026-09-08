@@ -211,13 +211,9 @@ with tab1:
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
-            "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
+            "### 📋 シミュレーション結果 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）"
         )
-        st.text_area(
-            "シミュレーション結果コピー用ボックス",
-            value=sim_copy_text,
-            height=120,
-        )
+        st.code(sim_copy_text, language="text")
 
         st.subheader("🎯 おすすめAI買い目インフォ")
         st.info(f"**【AI上位3頭推奨】**\n\n{ai_top3_combined}")
@@ -337,17 +333,12 @@ with tab2:
         else:
           st.warning(f"❌ **【自動判定】 {auto_memo}**")
 
-        # スプレッドシート用：実際の1着、2着、3着、自動判定メモをそれぞれ独立したセル（別タブ・別列）に配置
         sheet_row_text = (
             f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t{win_rate_val}\t{place_rate_val}\t{roi_val}\t{actual_1st}\t{actual_2nd}\t{actual_3rd}\t{auto_memo}"
         )
 
-        st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
-        st.text_area(
-            "検証結果コピー用ボックス",
-            value=sheet_row_text,
-            height=70,
-        )
+        st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
+        st.code(sheet_row_text, language="text")
 
   else:
     st.info(
