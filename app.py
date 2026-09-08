@@ -11,9 +11,9 @@ st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証", "🛠️ Geminiテキスト・スクショ整形"])
 
 with tab1:
-  st.header("100回モンテカルロ・シミュレーション")
+  st.header("100回モンテカルロ・シミュレーション（改良版）")
   st.write(
-      "出馬表CSVを貼り付けると、100回の模擬レースを実行し、勝率・複勝率・回収率を算出してスプレッドシート用テキストで保存できます。"
+      "出馬表CSVを貼り付けると、オッズと実力を反映した100回の模擬レースを実行し、勝率・複勝率・回収率を算出してスプレッドシート用テキストで保存できます。"
   )
 
   pasted_data = st.text_area(
@@ -100,27 +100,29 @@ with tab1:
       with st.spinner("100回の模擬レース（モンテカルロ法）を集計中..."):
         df_res = df_input.copy()
 
-        def calc_speed_index(row):
+        # 【改良】オッズをベースにした確率の逆数（1/オッズ）を馬の実力評価の基礎にする
+        # これにより市場の確率分布を取り入れつつ、オッズ妙味のある馬を正しく評価する
+        def calc_enhanced_score(row):
           try:
-            val = float(row["speed_val"])
-            if val > 0:
-              return val
+            odds = float(row["オッズ_num"])
+            if odds <= 0: odds = 10.0
+          except:
+            odds = 10.0
+          
+          # オッズからインプライド確率（1/オッズ）を計算し、それをベーススコアとする
+          base_score = (1.0 / odds) * 100.0
+          
+          # スピード指数や上がり3Fの補正（入力があれば反映、なければオッズ由来を維持）
+          try:
+            s_val = float(row["speed_val"])
+            if s_val > 0:
+              base_score += (s_val - 70.0) * 0.5
           except:
             pass
-          base_idx = 70.0
-          up_time = float(row["上がり3F_val"])
-          base_idx += (37.0 - up_time) * 4.0
-          recent = str(row.get("近走5走成績", "0-0-0-0"))
-          wins = 0 if recent in ["0", "新馬", ""] else recent.count("1")
-          base_idx += wins * 3.0
-          pop_bonus = max(0, (11 - float(row["人気_num"])) * 1.5)
-          return round(max(50.0, min(100.0, base_idx + pop_bonus)), 1)
 
-        df_res["スピード指数_calc"] = df_res.apply(calc_speed_index, axis=1)
+          return max(1.0, base_score)
 
-        df_res["ベース評価"] = (
-            df_res["スピード指数_calc"] * 0.7 + (37.0 - df_res["上がり3F_val"]) * 5.0
-        )
+        df_res["ベース評価"] = df_res.apply(calc_enhanced_score, axis=1)
 
         n_simulations = 100
         win_counts = np.zeros(len(df_res))
@@ -128,8 +130,9 @@ with tab1:
 
         np.random.seed(42)
         for _ in range(n_simulations):
+          # ノイズを適度に入れてレースごとの波乱を再現
           noise = np.random.normal(
-              0, df_res["ベース評価"].values * 0.1, size=len(df_res)
+              0, df_res["ベース評価"].values * 0.25, size=len(df_res)
           )
           sim_scores = df_res["ベース評価"].values + noise
           top_indices = np.argsort(sim_scores)[::-1]
@@ -393,14 +396,11 @@ with tab3:
       lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
-        # スペースやタブ、カンマで区切られたトークンを綺麗に分解
         tokens = re.split(r'[\s,\t]+', line)
         if len(tokens) >= 2:
-          # 馬番と馬名を推測抽出
           umaban = tokens[0]
           ubana = tokens[1]
           
-          # 残りのトークンからオッズや人気、騎手を賢く拾い出す
           odds = "10.0"
           ninki = "5人気"
           kishu = "レーン"
@@ -416,7 +416,7 @@ with tab3:
             elif t in ["逃", "先行", "差", "追"]:
               kyakushitsu = t
             elif re.search(r'^\d{2}\.\d$', t):
-              pass # 上がりタイム等
+              pass
             elif re.search(r'^\d{2}\.\d$', t) == None and len(t) >= 2 and not t.isdigit():
               kishu = t
             elif re.search(r'^\d{2}\.\d$', t) == None and (t.replace('.', '', 1).isdigit() and float(t) >= 48 and float(t) <= 60):
