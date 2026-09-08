@@ -132,11 +132,9 @@ with tab1:
           sim_scores = df_res["ベース評価"].values + noise
           top_indices = np.argsort(sim_scores)[::-1]
           
-          # 1着馬をカウント
           winner_idx = top_indices[0]
           win_counts[winner_idx] += 1
 
-          # 3着以内（複勝圏内）に入る馬をカウント
           placers = top_indices[: min(3, len(df_res))]
           for p_idx in placers:
             place_counts[p_idx] += 1
@@ -208,7 +206,7 @@ with tab1:
         sim_copy_text = tsv_buffer.getvalue()
 
         st.markdown(
-            "### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）"
+            "### 📋 シミュレーション結果 スプレッドシート用コピー欄（ワンタップ選択）"
         )
         st.text_area(
             "シミュレーション結果コピー用ボックス",
@@ -238,7 +236,7 @@ with tab1:
 with tab2:
   st.header("実際のレース結果との照合・検証")
   st.write(
-      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの的中状況を検証します。"
+      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの的中状況（勝率・複勝率の乖離）を検証します。"
   )
 
   uploaded_sim_file = st.file_uploader(
@@ -260,12 +258,7 @@ with tab2:
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
 
-    ai_top_row_preview = df_saved.iloc[0]
-    ai_top_num_p = str(ai_top_row_preview.get("馬番"))
-    ai_top_name_p = str(ai_top_row_preview.get("馬名"))
-    ai_top_str_p = f"{ai_top_num_p}番 {ai_top_name_p}"
-
-    st.subheader("2. 実際のレース結果を選択")
+    st.subheader("2. 実際のレース結果（1〜3着）を選択")
     col1, col2, col3 = st.columns(3)
     with col1:
       actual_1st = st.selectbox(
@@ -286,7 +279,6 @@ with tab2:
           index=0,
       )
 
-    # 判定オプションに複勝圏内や着差ステータスを用意
     margin_option = st.selectbox(
         "AI本命馬の着差・判定メモ",
         options=[
@@ -299,8 +291,8 @@ with tab2:
     )
 
     if st.button("🔍 予想結果を検証・判定する"):
-      if actual_1st == "選択してください":
-        st.warning("実際の1着馬を選択してください。")
+      if actual_1st == "選択してください" or actual_2nd == "選択してください" or actual_3rd == "選択してください":
+        st.warning("実際の1着〜3着馬すべてを選択してください。")
       else:
         ai_top_row = df_saved.iloc[0]
         ai_top_num = str(ai_top_row.get("馬番"))
@@ -311,15 +303,17 @@ with tab2:
         ai_roi = ai_top_row.get("AI期待回収率", "0%")
 
         st.markdown("---")
-        st.subheader("📝 検証結果レポート")
+        st.subheader("📝 検証結果レポート（シミュレーション3着以内 vs 実際の3着以内）")
 
         col_a, col_b = st.columns(2)
         with col_a:
-          st.info(f"**【AI本命予想】**\n\n◎ {ai_top_str}")
+          st.info(f"**【AI本命予想】**\n\n◎ {ai_top_str}\n\n(シミュ勝率: {ai_win_rate} / シミュ複勝率: {ai_place_rate})")
         with col_b:
-          st.success(
-              f"**【実際の着順】**\n\n1着: {actual_1st}\n2着:"
-              f" {actual_2nd}\n3着: {actual_3rd}"
+          st.markdown(
+              f"**【実際の3着まで】**\n\n"
+              f"🥇 1着: {actual_1st}\n\n"
+              f"🥈 2着: {actual_2nd}\n\n"
+              f"🥉 3着: {actual_3rd}"
           )
 
         def check_hit(selected_str, target_num, target_name):
@@ -346,18 +340,18 @@ with tab2:
           st.success("🎉 【判定】単勝的中！AIの本命が見事1着となりました！")
         elif is_place_hit:
           st.info(
-              "👍 【判定】複勝圏内的中！AIの本命が3着以内に入りました。"
+              "👍 【判定】複勝圏内的中！AIの本命が3着以内（複勝圏内）に入りました。"
           )
         else:
           st.warning(
-              f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
+              f"❌ 【判定】不的中（{margin_option}）。シミュレーションの確率と実際の着順の乖離を確認しましょう。"
           )
 
-        # 実際の1着馬欄に「着順詳細（例: 1番 ルースソラール (1人気・2.4倍)）」を綺麗にフォーマット
-        actual_1st_clean = actual_1st
-        
+        # スプレッドシート用テキストに出力する際、実際の3着までの情報を綺麗に連結
+        actual_top3_text = f"1着:{actual_1st} / 2着:{actual_2nd} / 3着:{actual_3rd}"
+
         sheet_row_text = (
-            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_1st_clean}\t{margin_option}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_top3_text}\t{margin_option}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
@@ -400,7 +394,7 @@ with tab3:
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.string if l.strip()]
       parsed_rows = []
       for line in lines:
         tokens = re.split(r'[\s,\t]+', line)
