@@ -163,9 +163,13 @@ with tab1:
         r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "5R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
-        export_rows = []
-        top_h_str = f"{df_ranked.iloc[0]['馬番']}番 {df_ranked.iloc[0]['馬名']}"
+        # AIの上位3頭の文字列を作成
+        top1_str = f"◎{df_ranked.iloc[0]['馬番']}番 {df_ranked.iloc[0]['馬名']}" if len(df_ranked) > 0 else ""
+        top2_str = f"〇{df_ranked.iloc[1]['馬番']}番 {df_ranked.iloc[1]['馬名']}" if len(df_ranked) > 1 else ""
+        top3_str = f"▲{df_ranked.iloc[2]['馬番']}番 {df_ranked.iloc[2]['馬名']}" if len(df_ranked) > 2 else ""
+        ai_top3_combined = f"{top1_str} / {top2_str} / {top3_str}"
 
+        export_rows = []
         for _, row in df_ranked.iterrows():
           export_rows.append({
               "日付": row["日付"],
@@ -173,11 +177,11 @@ with tab1:
               "レース番号": row["レース番号"],
               "距離・馬場": row["距離・馬場"],
               "レース条件": row["レース条件"],
-              "AI本命予想": top_h_str if row.name == 0 else "",
+              "AI上位3頭予想": ai_top3_combined if row.name == 0 else "",
               "シミュ勝率": row["シミュ勝率_str"],
               "シミュ複勝率": row["シミュ複勝率_str"],
               "AI期待回収率": row["AI期待回収率_str"],
-              "実際の1着馬": "",
+              "実際の1〜3着": "",
               "着差・判定メモ": "",
               "馬番": row["馬番"],
               "馬名": row["馬名"],
@@ -215,28 +219,14 @@ with tab1:
         )
 
         st.subheader("🎯 おすすめAI買い目インフォ")
-        top_horse = df_ranked.iloc[0]["馬名"]
-        top_num = df_ranked.iloc[0]["馬番"]
-        top_win = df_ranked.iloc[0]["シミュ勝率_str"]
-        top_place = df_ranked.iloc[0]["シミュ複勝率_str"]
-
-        df_roi_ranked = df_ranked.sort_values(by="_win_num", ascending=False)
-        value_horse = df_roi_ranked.iloc[0]["馬名"]
-        value_num = df_roi_ranked.iloc[0]["馬番"]
-        value_roi = df_roi_ranked.iloc[0]["AI期待回収率_str"]
-
-        st.info(
-            f"◎ **本命推し**: {top_num}番 {top_horse} (勝率: {top_win} / 複勝率:"
-            f" {top_place})\n\n★ **穴・妙味推奨**: {value_num}番"
-            f" {value_horse} (期待回収率: {value_roi})"
-        )
+        st.info(f"**【AI上位3頭推奨】**\n\n{ai_top3_combined}")
     else:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
 
 with tab2:
   st.header("実際のレース結果との照合・検証")
   st.write(
-      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの的中状況（勝率・複勝率の乖離）を検証します。"
+      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの上位3頭（◎〇▲）の的中状況を検証します。"
   )
 
   uploaded_sim_file = st.file_uploader(
@@ -257,6 +247,17 @@ with tab2:
     r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "5R"
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
+
+    # CSVからAIの上位3頭予想文字列を抽出
+    ai_top3_str = ""
+    if "AI上位3頭予想" in df_saved.columns and not pd.isna(df_saved["AI上位3頭予想"].iloc[0]):
+      ai_top3_str = str(df_saved["AI上位3頭予想"].iloc[0])
+    else:
+      # 旧形式のCSVのフォールバック
+      t1 = f"◎{df_saved.iloc[0]['馬番']}番 {df_saved.iloc[0]['馬名']}" if len(df_saved) > 0 else ""
+      t2 = f"〇{df_saved.iloc[1]['馬番']}番 {df_saved.iloc[1]['馬名']}" if len(df_saved) > 1 else ""
+      t3 = f"▲{df_saved.iloc[2]['馬番']}番 {df_saved.iloc[2]['馬名']}" if len(df_saved) > 2 else ""
+      ai_top3_str = f"{t1} / {t2} / {t3}"
 
     st.subheader("2. 実際のレース結果（1〜3着）を選択")
     col1, col2, col3 = st.columns(3)
@@ -280,12 +281,11 @@ with tab2:
       )
 
     margin_option = st.selectbox(
-        "AI本命馬の着差・判定メモ",
+        "AI上位3頭の絡み状況・判定メモ",
         options=[
-            "1着（的中）",
-            "2着・3着（複勝圏内）",
-            "4着以下（ハナ差・クビ差・惜しい）",
-            "4着以下（完敗・見当違い）",
+            "的中（上位3頭から勝ち馬あり／馬券内絡み）",
+            "惜敗（ハナ差・クビ差）",
+            "不格外れ（上位3頭が馬券外）",
         ],
         index=0,
     )
@@ -294,20 +294,12 @@ with tab2:
       if actual_1st == "選択してください" or actual_2nd == "選択してください" or actual_3rd == "選択してください":
         st.warning("実際の1着〜3着馬すべてを選択してください。")
       else:
-        ai_top_row = df_saved.iloc[0]
-        ai_top_num = str(ai_top_row.get("馬番"))
-        ai_top_name = str(ai_top_row.get("馬名"))
-        ai_top_str = f"{ai_top_num}番 {ai_top_name}"
-        ai_win_rate = ai_top_row.get("シミュ勝率", "0%")
-        ai_place_rate = ai_top_row.get("シミュ複勝率", "0%")
-        ai_roi = ai_top_row.get("AI期待回収率", "0%")
-
         st.markdown("---")
-        st.subheader("📝 検証結果レポート（シミュレーション3着以内 vs 実際の3着以内）")
+        st.subheader("📝 検証結果レポート（AI上位3頭 vs 実際の1〜3着）")
 
         col_a, col_b = st.columns(2)
         with col_a:
-          st.info(f"**【AI本命予想】**\n\n◎ {ai_top_str}\n\n(シミュ勝率: {ai_win_rate} / シミュ複勝率: {ai_place_rate})")
+          st.info(f"**【AI上位3頭予想】**\n\n{ai_top3_str}")
         with col_b:
           st.markdown(
               f"**【実際の3着まで】**\n\n"
@@ -316,42 +308,11 @@ with tab2:
               f"🥉 3着: {actual_3rd}"
           )
 
-        def check_hit(selected_str, target_num, target_name):
-          if not selected_str or selected_str == "選択してください":
-            return False
-          match = re.match(r"^(\d+)番", selected_str.strip())
-          if match:
-            selected_num = match.group(1)
-            if selected_num == str(target_num):
-              return True
-          if target_name in selected_str:
-            return True
-          return False
-
-        is_win_hit = check_hit(actual_1st, ai_top_num, ai_top_name)
-        is_place_hit = (
-            is_win_hit
-            or check_hit(actual_2nd, ai_top_num, ai_top_name)
-            or check_hit(actual_3rd, ai_top_num, ai_top_name)
-        )
-
-        if is_win_hit:
-          st.balloons()
-          st.success("🎉 【判定】単勝的中！AIの本命が見事1着となりました！")
-        elif is_place_hit:
-          st.info(
-              "👍 【判定】複勝圏内的中！AIの本命が3着以内（複勝圏内）に入りました。"
-          )
-        else:
-          st.warning(
-              f"❌ 【判定】不的中（{margin_option}）。シミュレーションの確率と実際の着順の乖離を確認しましょう。"
-          )
-
-        # スプレッドシート用テキストに出力する際、実際の3着までの情報を綺麗に連結
+        # スプレッドシート用テキストに出力する際、AI上位3頭と実際の3着までを綺麗に連結
         actual_top3_text = f"1着:{actual_1st} / 2着:{actual_2nd} / 3着:{actual_3rd}"
 
         sheet_row_text = (
-            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_top3_text}\t{margin_option}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t-\t-\t-\t{actual_top3_text}\t{margin_option}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
@@ -394,7 +355,7 @@ with tab3:
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.string if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
         tokens = re.split(r'[\s,\t]+', line)
