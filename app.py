@@ -8,7 +8,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wid
 
 st.title("競馬予想AIシミュレーター ＆ 精度検証ツール")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・検証", "🛠️ Geminiテキスト・スクショ整形"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・自動判定検証", "🛠️ Geminiテキスト・スクショ整形"])
 
 with tab1:
   st.header("100回モンテカルロ・シミュレーション（改良版）")
@@ -182,7 +182,7 @@ with tab1:
               "シミュ複勝率": row["シミュ複勝率_str"],
               "AI期待回収率": row["AI期待回収率_str"],
               "実際の1〜3着": "",
-              "着差・判定メモ": "",
+              "自動判定メモ": "",
               "馬番": row["馬番"],
               "馬名": row["馬名"],
               "人気": row["人気"],
@@ -224,9 +224,9 @@ with tab1:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
 
 with tab2:
-  st.header("実際のレース結果との照合・検証")
+  st.header("実際のレース結果との照合・自動判定")
   st.write(
-      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択してAIの上位3頭（◎〇▲）の的中状況を検証します。"
+      "保存したシミュレーション結果（CSV）をアップロードし、実際の1〜3着馬を選択すると、AIの上位3頭（◎〇▲）が何頭絡んだかを自動で判定します。"
   )
 
   uploaded_sim_file = st.file_uploader(
@@ -248,16 +248,17 @@ with tab2:
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
 
-    # CSVからAIの上位3頭予想文字列を抽出
-    ai_top3_str = ""
-    if "AI上位3頭予想" in df_saved.columns and not pd.isna(df_saved["AI上位3頭予想"].iloc[0]):
-      ai_top3_str = str(df_saved["AI上位3頭予想"].iloc[0])
-    else:
-      # 旧形式のCSVのフォールバック
-      t1 = f"◎{df_saved.iloc[0]['馬番']}番 {df_saved.iloc[0]['馬名']}" if len(df_saved) > 0 else ""
-      t2 = f"〇{df_saved.iloc[1]['馬番']}番 {df_saved.iloc[1]['馬名']}" if len(df_saved) > 1 else ""
-      t3 = f"▲{df_saved.iloc[2]['馬番']}番 {df_saved.iloc[2]['馬名']}" if len(df_saved) > 2 else ""
-      ai_top3_str = f"{t1} / {t2} / {t3}"
+    # AIの上位3頭（1位、2位、3位）の馬番と馬名を抽出
+    ai_top3_list = []
+    for i in range(min(3, len(df_saved))):
+      h_num = str(df_saved.iloc[i].get("馬番"))
+      h_name = str(df_saved.iloc[i].get("馬名"))
+      ai_top3_list.append({"num": h_num, "name": h_name})
+
+    t1 = f"◎{ai_top3_list[0]['num']}番 {ai_top3_list[0]['name']}" if len(ai_top3_list) > 0 else ""
+    t2 = f"〇{ai_top3_list[1]['num']}番 {ai_top3_list[1]['name']}" if len(ai_top3_list) > 1 else ""
+    t3 = f"▲{ai_top3_list[2]['num']}番 {ai_top3_list[2]['name']}" if len(ai_top3_list) > 2 else ""
+    ai_top3_str = f"{t1} / {t2} / {t3}"
 
     st.subheader("2. 実際のレース結果（1〜3着）を選択")
     col1, col2, col3 = st.columns(3)
@@ -280,22 +281,45 @@ with tab2:
           index=0,
       )
 
-    margin_option = st.selectbox(
-        "AI上位3頭の絡み状況・判定メモ",
-        options=[
-            "的中（上位3頭から勝ち馬あり／馬券内絡み）",
-            "惜敗（ハナ差・クビ差）",
-            "不格外れ（上位3頭が馬券外）",
-        ],
-        index=0,
-    )
-
-    if st.button("🔍 予想結果を検証・判定する"):
+    if st.button("🔍 予想結果を自動判定する"):
       if actual_1st == "選択してください" or actual_2nd == "選択してください" or actual_3rd == "選択してください":
         st.warning("実際の1着〜3着馬すべてを選択してください。")
       else:
+        # 馬番を抽出し、実際の3着以内馬のリストを作成
+        def get_umaban(sel_str):
+          m = re.match(r"^(\d+)番", sel_str.strip())
+          return m.group(1) if m else ""
+
+        actual_nums = [
+            get_umaban(actual_1st),
+            get_umaban(actual_2nd),
+            get_umaban(actual_3rd)
+        ]
+
+        # AI上位3頭の馬番リスト
+        ai_nums = [item["num"] for item in ai_top3_list]
+
+        # 実際の3着以内にAIの上位3頭が何頭絡んでいるかを自動カウント
+        hit_horses = []
+        for item in ai_top3_list:
+          if item["num"] in actual_nums:
+            hit_horses.append(f"{item['num']}番 {item['name']}")
+
+        hit_count = len(hit_horses)
+
+        # 自動判定のステータス生成
+        if hit_count == 3:
+          auto_memo = "完璧的中（上位3頭がすべて馬券内独占）"
+          badge_type = "success"
+        elif hit_count >= 1:
+          auto_memo = f"的中（上位3頭から {hit_count}頭が馬券内絡み）: " + ", ".join(hit_horses)
+          badge_type = "success"
+        else:
+          auto_memo = "不格外れ（上位3頭がすべて馬券外）"
+          badge_type = "warning"
+
         st.markdown("---")
-        st.subheader("📝 検証結果レポート（AI上位3頭 vs 実際の1〜3着）")
+        st.subheader("📝 自動判定結果レポート")
 
         col_a, col_b = st.columns(2)
         with col_a:
@@ -308,11 +332,16 @@ with tab2:
               f"🥉 3着: {actual_3rd}"
           )
 
-        # スプレッドシート用テキストに出力する際、AI上位3頭と実際の3着までを綺麗に連結
+        if badge_type == "success":
+          st.balloons()
+          st.success(f"🎉 **【自動判定】 {auto_memo}**")
+        else:
+          st.warning(f"❌ **【自動判定】 {auto_memo}**")
+
         actual_top3_text = f"1着:{actual_1st} / 2着:{actual_2nd} / 3着:{actual_3rd}"
 
         sheet_row_text = (
-            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t-\t-\t-\t{actual_top3_text}\t{margin_option}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t-\t-\t-\t{actual_top3_text}\t{auto_memo}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
