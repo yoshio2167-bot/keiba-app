@@ -100,8 +100,6 @@ with tab1:
       with st.spinner("100回の模擬レース（モンテカルロ法）を集計中..."):
         df_res = df_input.copy()
 
-        # 【改良】オッズをベースにした確率の逆数（1/オッズ）を馬の実力評価の基礎にする
-        # これにより市場の確率分布を取り入れつつ、オッズ妙味のある馬を正しく評価する
         def calc_enhanced_score(row):
           try:
             odds = float(row["オッズ_num"])
@@ -109,10 +107,8 @@ with tab1:
           except:
             odds = 10.0
           
-          # オッズからインプライド確率（1/オッズ）を計算し、それをベーススコアとする
           base_score = (1.0 / odds) * 100.0
           
-          # スピード指数や上がり3Fの補正（入力があれば反映、なければオッズ由来を維持）
           try:
             s_val = float(row["speed_val"])
             if s_val > 0:
@@ -130,15 +126,17 @@ with tab1:
 
         np.random.seed(42)
         for _ in range(n_simulations):
-          # ノイズを適度に入れてレースごとの波乱を再現
           noise = np.random.normal(
               0, df_res["ベース評価"].values * 0.25, size=len(df_res)
           )
           sim_scores = df_res["ベース評価"].values + noise
           top_indices = np.argsort(sim_scores)[::-1]
+          
+          # 1着馬をカウント
           winner_idx = top_indices[0]
           win_counts[winner_idx] += 1
 
+          # 3着以内（複勝圏内）に入る馬をカウント
           placers = top_indices[: min(3, len(df_res))]
           for p_idx in placers:
             place_counts[p_idx] += 1
@@ -262,6 +260,11 @@ with tab2:
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else ""
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else ""
 
+    ai_top_row_preview = df_saved.iloc[0]
+    ai_top_num_p = str(ai_top_row_preview.get("馬番"))
+    ai_top_name_p = str(ai_top_row_preview.get("馬名"))
+    ai_top_str_p = f"{ai_top_num_p}番 {ai_top_name_p}"
+
     st.subheader("2. 実際のレース結果を選択")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -283,8 +286,9 @@ with tab2:
           index=0,
       )
 
+    # 判定オプションに複勝圏内や着差ステータスを用意
     margin_option = st.selectbox(
-        "AI本命馬の着差・状況",
+        "AI本命馬の着差・判定メモ",
         options=[
             "1着（的中）",
             "2着・3着（複勝圏内）",
@@ -349,8 +353,11 @@ with tab2:
               f"❌ 【判定】不的中（{margin_option}）。次回のパラメータ調整に活かしましょう。"
           )
 
+        # 実際の1着馬欄に「着順詳細（例: 1番 ルースソラール (1人気・2.4倍)）」を綺麗にフォーマット
+        actual_1st_clean = actual_1st
+        
         sheet_row_text = (
-            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_1st}\t{margin_option}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top_str}\t{ai_win_rate}\t{ai_place_rate}\t{ai_roi}\t{actual_1st_clean}\t{margin_option}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
