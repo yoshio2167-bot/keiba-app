@@ -247,6 +247,12 @@ with tab2:
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(雨 稍重)"
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "3歳上1勝クラス"
 
+    # 1位馬のシミュ勝率・複勝率・回収率をCSVから正しく取得（なければデフォルト値）
+    top1_row = df_saved.iloc[0]
+    win_rate_val = str(top1_row.get("シミュ勝率", top1_row.get("シミュ勝率_str", "0%")))
+    place_rate_val = str(top1_row.get("シミュ複勝率", top1_row.get("シミュ複勝率_str", "0%")))
+    roi_val = str(top1_row.get("AI期待回収率", top1_row.get("AI期待回収率_str", "0%")))
+
     ai_top3_list = []
     for i in range(min(3, len(df_saved))):
       h_num = str(df_saved.iloc[i].get("馬番"))
@@ -332,8 +338,9 @@ with tab2:
 
         actual_top3_text = f"1着:{actual_1st} / 2着:{actual_2nd} / 3着:{actual_3rd}"
 
+        # スプレッドシート用テキストに正しい勝率・複勝率・回収率を反映
         sheet_row_text = (
-            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t-\t-\t-\t{actual_top3_text}\t{auto_memo}"
+            f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{ai_top3_str}\t{win_rate_val}\t{place_rate_val}\t{roi_val}\t{actual_top3_text}\t{auto_memo}"
         )
 
         st.markdown("### 📋 検証結果 スプレッドシート用コピー欄（ワンタップ選択）")
