@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター（高精度版）", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="競馬予想AIシミュレーター（軽量高速版）", layout="wide", initial_sidebar_state="collapsed")
 
 st.title("競馬予想AIシミュレーター ＆ 高精度回収率フィルター")
 
@@ -13,7 +13,7 @@ tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結�
 with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 展開・ペース選択")
   st.write(
-      "出馬表CSVを貼り付け、レースの「展開（ペース）」や「シミュレーション回数」を設定して精度の高い予想を実行できます。"
+      "出馬表CSVを貼り付け、レースの「展開（ペース）」や「シミュレーション回数」を設定して高速に予想を実行できます。"
   )
 
   col_s1, col_s2, col_s3 = st.columns(3)
@@ -28,7 +28,6 @@ with tab1:
   with col_s3:
     sim_count_input = st.selectbox("🔄 シミュレーション回数", options=["1回（一発ガチ予想）", "100回", "300回", "500回"], index=1)
 
-  # 試行回数の数値変換
   if "1回" in sim_count_input:
     sim_count = 1
   elif "100回" in sim_count_input:
@@ -38,17 +37,29 @@ with tab1:
   else:
     sim_count = 500
 
+  # セッションステートでテキストエリアの状態を管理（一括削除用）
+  if "pasted_csv" not in st.session_state:
+    st.session_state.pasted_csv = ""
+
+  col_btn1, col_btn2 = st.columns([0.8, 0.2])
+  with col_btn2:
+    if st.button("🗑️ 一括削除", type="secondary"):
+      st.session_state.pasted_csv = ""
+      st.rerun()
+
   pasted_data = st.text_area(
       "CSVデータ貼り付け欄",
+      value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/06,阪神,11R,芝1200m(良),セントウルS G2,1,ママコチャ,5人気,10.8,先,0,0,7-5-3-10,武豊,56.0"
+          "2026/09/19,中山,2R,ダ1800m(晴 良),2歳未勝利,7,バミュダブーケ,4人気,16.9,差追,41.4,0,0-0-0-2,ミシェル,55.0"
       ),
       height=180,
   )
+  st.session_state.pasted_csv = pasted_data
 
   df_input = None
-  if pasted_data:
+  if pasted_data.strip():
     try:
       lines = [line.strip() for line in pasted_data.strip().split("\n") if line.strip()]
       if len(lines) > 0:
@@ -60,7 +71,7 @@ with tab1:
         for l in data_lines:
           parts = [p.strip() for p in l.split(",")]
           if len(parts) >= 15:
-            row_dict = {
+            parsed_rows.append({
                 "日付": parts[0],
                 "開催地": parts[1],
                 "レース番号": parts[2],
@@ -76,8 +87,7 @@ with tab1:
                 "近走5走成績": parts[12],
                 "騎手": parts[13],
                 "斤量": parts[14],
-            }
-            parsed_rows.append(row_dict)
+            })
 
         if parsed_rows:
           df_input = pd.DataFrame(parsed_rows)
@@ -107,14 +117,14 @@ with tab1:
             "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
         ]
         available_preview = [c for c in preview_cols if c in df_input.columns]
-        st.dataframe(df_input[available_preview], use_container_width=True)
+        st.dataframe(df_input[available_preview], use_container_width=True, height=200)
 
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 予想・シミュレーションを実行", type="primary"):
+  if st.button("🚀 高速シミュレーション＆予想を実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("出馬表と展開・ペースを解析中..."):
+      with st.spinner("高速解析中..."):
         df_res = df_input.copy()
 
         def calc_enhanced_score(row):
@@ -126,7 +136,6 @@ with tab1:
           
           base_score = max(10.0, 160.0 / (np.log(odds + 1.0) + 0.7))
           
-          # 上がり3F評価
           try:
             f_val = float(row["上がり3F_val"])
             if 30.0 <= f_val <= 42.0:
@@ -134,20 +143,14 @@ with tab1:
           except:
             pass
 
-          # 展開（ペース）による脚質補正
           kyaku = str(row["脚質"])
           if "スロー" in pace_mode:
-            if kyaku in ["逃", "先行"]:
-              base_score += 15.0  # 前残り優遇
-            elif kyaku in ["追", "後"]:
-              base_score -= 10.0
+            if any(k in kyaku for k in ["逃", "先行"]):
+              base_score += 15.0
           elif "ハイ・タフ" in pace_mode:
-            if kyaku in ["差", "追"]:
-              base_score += 18.0  # 差し・追い込み優遇
-            elif kyaku in ["逃"]:
-              base_score -= 12.0
+            if any(k in kyaku for k in ["差", "追"]):
+              base_score += 18.0
 
-          # 近走成績ボーナス
           try:
             rec = str(row["近走5走成績"])
             first_num = int(rec.split("-")[0]) if "-" in rec and rec.split("-")[0].isdigit() else 5
@@ -165,8 +168,6 @@ with tab1:
 
         np.random.seed(42)
         scores_arr = df_res["ベース評価"].values
-        
-        # 1回モードの場合はノイズをゼロにして決定論的に算出、複数回の場合はモンテカルロ法
         actual_sims = max(1, sim_count)
         noise_scale = 0.0 if actual_sims == 1 else np.mean(scores_arr) * 0.4
 
@@ -191,7 +192,7 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
-        st.subheader(f"📊 予想・ランキング結果（展開: {pace_mode} / 試行: {sim_count_input}）")
+        st.subheader("📊 予想・ランキング結果")
         
         display_cols = [
             "開催地", "レース番号", "距離・馬場", "レース条件",
@@ -200,10 +201,10 @@ with tab1:
         ]
         available_cols = [c for c in display_cols if c in df_ranked.columns]
         df_display = df_ranked[available_cols]
-        st.dataframe(df_display, use_container_width=True)
+        st.dataframe(df_display, use_container_width=True, height=250)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
-        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "11R"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "中山"
+        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "2R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
@@ -266,9 +267,7 @@ with tab1:
         df_export_final.to_csv(tsv_buffer, sep="\t", index=False)
         sim_copy_text = tsv_buffer.getvalue()
 
-        st.markdown(
-            "### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）"
-        )
+        st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
         st.code(sim_copy_text, language="text")
 
         st.subheader("🎯 勝負判定 ＆ 推奨買い目インフォ")
@@ -294,11 +293,11 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026/09/06"
-    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
-    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "11R"
-    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(良)"
-    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "セントウルS G2"
+    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026/09/19"
+    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "中山"
+    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "2R"
+    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "ダ1800m(晴 良)"
+    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "2歳未勝利"
 
     top1_row = df_saved.iloc[0]
     win_rate_val = str(top1_row.get("シミュ勝率", top1_row.get("シミュ勝率_str", "0%")))
@@ -387,7 +386,7 @@ with tab3:
 
   raw_txt = st.text_area(
       "ここにカンマ区切りの出馬表データを貼り付け",
-      placeholder="2026/09/06,阪神,11R,芝1200m(良),セントウルS G2,1,ママコチャ...",
+      placeholder="2026/09/19,中山,2R,ダ1800m(晴 良),2歳未勝利...",
       height=150,
   )
 
