@@ -4,29 +4,31 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター（軽量高速版）", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="競馬予想AIシミュレーター（3連複・配分対応版）", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 高精度回収率フィルター")
+st.title("競馬予想AIシミュレーター ＆ 3連複・資金配分自動化")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆3連複予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 展開・ペース選択")
+  st.header("モンテカルロ・シミュレーション ＆ 3連複・資金配分")
   st.write(
-      "出馬表CSVを貼り付け、レースの「展開（ペース）」や「シミュレーション回数」を設定して高速に予想を実行できます。"
+      "出馬表CSVを貼り付け、展開や予算を設定すると、3連複の買い目と最適な資金配分を自動算出します。"
   )
 
-  col_s1, col_s2, col_s3 = st.columns(3)
+  col_s1, col_s2, col_s3, col_s4 = st.columns(4)
   with col_s1:
     pace_mode = st.selectbox(
-        "🏇 展開・ペース予測",
-        options=["平均ペース（バランス型）", "スローペース（前残・先行有利）", "ハイ・タフ（差し・追込有利）"],
+        "🏇 展開・ペース",
+        options=["平均ペース（バランス）", "スロー（前残・先行）", "ハイ・タフ（差し・追込）"],
         index=0
     )
   with col_s2:
-    threshold_roi = st.slider("🎯 勝負見送りライン（期待回収率 % 未満をパス）", min_value=100, max_value=200, value=120, step=10)
+    threshold_roi = st.slider("🎯 見送りライン(%)", min_value=100, max_value=200, value=120, step=10)
   with col_s3:
-    sim_count_input = st.selectbox("🔄 シミュレーション回数", options=["1回（一発ガチ予想）", "100回", "300回", "500回"], index=1)
+    sim_count_input = st.selectbox("🔄 試行回数", options=["1回（一発ガチ）", "100回", "300回", "500回"], index=1)
+  with col_s4:
+    total_budget = st.number_input("💰 投資予算 (円)", min_value=500, max_value=50000, value=2000, step=500)
 
   if "1回" in sim_count_input:
     sim_count = 1
@@ -51,9 +53,9 @@ with tab1:
       value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/20,阪神,1R,芝1400m(良),2歳未勝利,1,ルクスルーラー,1人気,2.3,先,34.5,0,1-0-0-0,武豊,55.0"
+          "2026/09/20,阪神,1R,障2970m(晴 良),障害3歳以上未勝利,11,クロライナ,11人気,44.4,差,0,0,0-0-0-0-6,五十嵐雄,60.0"
       ),
-      height=180,
+      height=160,
   )
   st.session_state.pasted_csv = pasted_data
 
@@ -113,15 +115,15 @@ with tab1:
         
         preview_cols = [
             "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
-            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+            "馬番", "馬名", "人気", "単勝オッズ", "脚質", "上がり3F", "近走5走成績", "騎手", "斤量"
         ]
         available_preview = [c for c in preview_cols if c in df_input.columns]
-        st.dataframe(df_input[available_preview], use_container_width=True, height=200)
+        st.dataframe(df_input[available_preview], use_container_width=True, height=180)
 
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 高速シミュレーション＆予想を実行", type="primary"):
+  if st.button("🚀 予想・3連複＆資金配分を実行", type="primary"):
     if df_input is not None and not df_input.empty:
       with st.spinner("高速解析中..."):
         df_res = df_input.copy()
@@ -200,15 +202,17 @@ with tab1:
         ]
         available_cols = [c for c in display_cols if c in df_ranked.columns]
         df_display = df_ranked[available_cols]
-        st.dataframe(df_display, use_container_width=True, height=250)
+        st.dataframe(df_display, use_container_width=True, height=220)
 
         kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
-        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "11R"
+        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "1R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
         top2 = df_ranked.iloc[1] if len(df_ranked) > 1 else None
         top3 = df_ranked.iloc[2] if len(df_ranked) > 2 else None
+        top4 = df_ranked.iloc[3] if len(df_ranked) > 3 else None
+        top5 = df_ranked.iloc[4] if len(df_ranked) > 4 else None
 
         top1_str = f"◎{top1['馬番']}番 {top1['馬名']}" if top1 is not None else ""
         top2_str = f"〇{top2['馬番']}番 {top2['馬名']}" if top2 is not None else ""
@@ -218,7 +222,21 @@ with tab1:
         wide_1 = f"◎{top1['馬番']} - 〇{top2['馬番']}" if top1 is not None and top2 is not None else ""
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
-        three_renpuku_focus = f"【推奨3連複軸2頭流し】 軸: ◎{top1['馬番']} ＆ 〇{top2['馬番']} － 相手: ▲{top3['馬番']} 他"
+
+        # 3連複 軸2頭流し（軸：◎〇、相手：▲、4位、5位の3点）
+        t3_partner1 = f"{top3['馬番']}" if top3 is not None else "3"
+        t3_partner2 = f"{top4['馬番']}" if top4 is not None else "4"
+        t3_partner3 = f"{top5['馬番']}" if top5 is not None else "5"
+        
+        num_bets_3ren = 3  # 軸2頭-相手3頭 = 3点
+        bet_amount_per_point = max(100, int((total_budget / 100 / num_bets_3ren) * 100))
+
+        three_renpuku_focus = (
+            f"【推奨3連複 軸2頭流し（全3点）】\n"
+            f"  軸: ◎{top1['馬番']}番 ＆ 〇{top2['馬番']}番\n"
+            f"  相手: ▲{top3['馬番']}番, {top4['馬番']}番, {top5['馬番']}番\n"
+            f"  💡 **資金配分**: 1点あたり **{bet_amount_per_point}円** （合計投資: {bet_amount_per_point * num_bets_3ren}円）"
+        )
 
         try:
           roi_val_num = float(str(top1["AI期待回収率_str"]).replace("%", ""))
@@ -270,11 +288,21 @@ with tab1:
         st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
         st.code(sim_copy_text, language="text")
 
-        st.subheader("🎯 勝負判定 ＆ 推奨買い目インフォ")
+        st.subheader("🎯 勝負判定 ＆ 自動3連複・資金配分インフォ")
         if roi_val_num >= threshold_roi:
-          st.success(f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n{three_renpuku_focus}\n\n※期待値が高いため、ワイド2点や3連複軸2頭流しで高回収を狙えます。")
+          st.success(
+              f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n"
+              f"{strict_buy_focus}\n\n"
+              f"{three_renpuku_focus}\n\n"
+              f"※期待値が高いため、ワイドおよび3連複軸2頭流しで高回収を狙えます。"
+          )
         else:
-          st.warning(f"⚠️ **【見送り推奨 / パス】（期待回収率: {top1['AI期待回収率_str']} ＜ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n※期待回収率が基準未満です。無駄な投資を避けるため、このレースは見送り（パス）が賢明です。")
+          st.warning(
+              f"⚠️ **【見送り推奨 / パス】（期待回収率: {top1['AI期待回収率_str']} ＜ 設定基準 {threshold_roi}%）**\n\n"
+              f"{strict_buy_focus}\n\n"
+              f"{three_renpuku_focus}\n\n"
+              f"※期待回収率が基準未満です。無駄な投資を避けるため、このレースは見送り（パス）が賢明です。"
+          )
     else:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
 
@@ -295,7 +323,7 @@ with tab2:
 
     date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026-09-20"
     kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
-    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "11R"
+    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "1R"
     dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(良)"
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "オープン"
 
@@ -386,13 +414,13 @@ with tab3:
 
   raw_txt = st.text_area(
       "ここにカンマ区切りの出馬表データを貼り付け",
-      placeholder="2026-09-20,阪神,11R,芝1200m(良),オープン,1,ルクスルーラー...",
+      placeholder="2026-09-20,阪神,1R,芝1200m(良),オープン,1,ルクスルーラー...",
       height=150,
   )
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.script()] if hasattr(raw_txt, 'script') else [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
         parts = [p.strip() for p in line.split(",") if p.strip()]
