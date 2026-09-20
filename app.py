@@ -4,30 +4,24 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター（3連複・配分対応版）", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="競馬予想AIシミュレーター（完全自動化版）", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 3連複・資金配分自動化")
+st.title("競馬予想AIシミュレーター ＆ 自動ペース判定・3連複配分")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆3連複予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動3連複予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 3連複・資金配分")
+  st.header("モンテカルロ・シミュレーション ＆ 完全自動ペース予測")
   st.write(
-      "出馬表CSVを貼り付け、展開や予算を設定すると、3連複の買い目と最適な資金配分を自動算出します。"
+      "出馬表CSVを貼り付けて予算を設定するだけで、AIがレースのペースを自動判定し、最適な3連複買い目と資金配分を算出します。"
   )
 
-  col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+  col_s1, col_s2, col_s3 = st.columns(3)
   with col_s1:
-    pace_mode = st.selectbox(
-        "🏇 展開・ペース",
-        options=["平均ペース（バランス）", "スロー（前残・先行）", "ハイ・タフ（差し・追込）"],
-        index=0
-    )
-  with col_s2:
     threshold_roi = st.slider("🎯 見送りライン(%)", min_value=100, max_value=200, value=120, step=10)
-  with col_s3:
+  with col_s2:
     sim_count_input = st.selectbox("🔄 試行回数", options=["1回（一発ガチ）", "100回", "300回", "500回"], index=1)
-  with col_s4:
+  with col_s3:
     total_budget = st.number_input("💰 投資予算 (円)", min_value=500, max_value=50000, value=2000, step=500)
 
   if "1回" in sim_count_input:
@@ -123,10 +117,28 @@ with tab1:
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 予想・3連複＆資金配分を実行", type="primary"):
+  if st.button("🚀 自動ペース判定 ＆ 予想を実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("高速解析中..."):
+      with st.spinner("AIがレース展開を自動判定・解析中..."):
         df_res = df_input.copy()
+
+        # 出馬表の脚質構成からペースを自動判定
+        nige_senko_count = 0
+        sashi_tsui_count = 0
+        for _, row in df_res.iterrows():
+          kyaku = str(row["脚質"])
+          if any(k in kyaku for k in ["逃", "先行"]):
+            nige_senko_count += 1
+          elif any(k in kyaku for k in ["差", "追"]):
+            sashi_tsui_count += 1
+
+        total_horses = len(df_res)
+        if nige_senko_count <= max(1, total_horses * 0.2):
+          auto_pace_name = "スローペース（前残・先行有利）"
+        elif nige_senko_count >= total_horses * 0.5:
+          auto_pace_name = "ハイ・タフペース（差し・追込有利）"
+        else:
+          auto_pace_name = "平均ペース（バランス型）"
 
         def calc_enhanced_score(row):
           try:
@@ -145,10 +157,10 @@ with tab1:
             pass
 
           kyaku = str(row["脚質"])
-          if "スロー" in pace_mode:
+          if "スロー" in auto_pace_name:
             if any(k in kyaku for k in ["逃", "先行"]):
               base_score += 15.0
-          elif "ハイ・タフ" in pace_mode:
+          elif "ハイ・タフ" in auto_pace_name:
             if any(k in kyaku for k in ["差", "追"]):
               base_score += 18.0
 
@@ -193,6 +205,7 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
+        st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
         st.subheader("📊 予想・ランキング結果")
         
         display_cols = [
@@ -223,12 +236,7 @@ with tab1:
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
 
-        # 3連複 軸2頭流し（軸：◎〇、相手：▲、4位、5位の3点）
-        t3_partner1 = f"{top3['馬番']}" if top3 is not None else "3"
-        t3_partner2 = f"{top4['馬番']}" if top4 is not None else "4"
-        t3_partner3 = f"{top5['馬番']}" if top5 is not None else "5"
-        
-        num_bets_3ren = 3  # 軸2頭-相手3頭 = 3点
+        num_bets_3ren = 3
         bet_amount_per_point = max(100, int((total_budget / 100 / num_bets_3ren) * 100))
 
         three_renpuku_focus = (
