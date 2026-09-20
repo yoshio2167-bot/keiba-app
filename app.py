@@ -37,7 +37,6 @@ with tab1:
   else:
     sim_count = 500
 
-  # セッションステートでテキストエリアの状態を管理（一括削除用）
   if "pasted_csv" not in st.session_state:
     st.session_state.pasted_csv = ""
 
@@ -52,7 +51,7 @@ with tab1:
       value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/19,中山,2R,ダ1800m(晴 良),2歳未勝利,7,バミュダブーケ,4人気,16.9,差追,41.4,0,0-0-0-2,ミシェル,55.0"
+          "2026/09/20,阪神,1R,芝1400m(良),2歳未勝利,1,ルクスルーラー,1人気,2.3,先,34.5,0,1-0-0-0,武豊,55.0"
       ),
       height=180,
   )
@@ -203,8 +202,8 @@ with tab1:
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True, height=250)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "中山"
-        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "2R"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
+        r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "11R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
@@ -219,6 +218,7 @@ with tab1:
         wide_1 = f"◎{top1['馬番']} - 〇{top2['馬番']}" if top1 is not None and top2 is not None else ""
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
+        three_renpuku_focus = f"【推奨3連複軸2頭流し】 軸: ◎{top1['馬番']} ＆ 〇{top2['馬番']} － 相手: ▲{top3['馬番']} 他"
 
         try:
           roi_val_num = float(str(top1["AI期待回収率_str"]).replace("%", ""))
@@ -272,7 +272,7 @@ with tab1:
 
         st.subheader("🎯 勝負判定 ＆ 推奨買い目インフォ")
         if roi_val_num >= threshold_roi:
-          st.success(f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n※期待値が高いため、ワイド2点勝負で高回収を狙えます。")
+          st.success(f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n{three_renpuku_focus}\n\n※期待値が高いため、ワイド2点や3連複軸2頭流しで高回収を狙えます。")
         else:
           st.warning(f"⚠️ **【見送り推奨 / パス】（期待回収率: {top1['AI期待回収率_str']} ＜ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n※期待回収率が基準未満です。無駄な投資を避けるため、このレースは見送り（パス）が賢明です。")
     else:
@@ -293,11 +293,11 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026/09/19"
-    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "中山"
-    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "2R"
-    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "ダ1800m(晴 良)"
-    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "2歳未勝利"
+    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026-09-20"
+    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
+    r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "11R"
+    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(良)"
+    cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "オープン"
 
     top1_row = df_saved.iloc[0]
     win_rate_val = str(top1_row.get("シミュ勝率", top1_row.get("シミュ勝率_str", "0%")))
@@ -386,13 +386,13 @@ with tab3:
 
   raw_txt = st.text_area(
       "ここにカンマ区切りの出馬表データを貼り付け",
-      placeholder="2026/09/19,中山,2R,ダ1800m(晴 良),2歳未勝利...",
+      placeholder="2026-09-20,阪神,11R,芝1200m(良),オープン,1,ルクスルーラー...",
       height=150,
   )
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.script()] if hasattr(raw_txt, 'script') else [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
         parts = [p.strip() for p in line.split(",") if p.strip()]
