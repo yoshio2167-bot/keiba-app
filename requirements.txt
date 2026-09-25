@@ -2,3 +2,7 @@ streamlit
 pandas
 fpdf2
 numpy
+matplotlib
+pandas
+numpy
+streamlit
