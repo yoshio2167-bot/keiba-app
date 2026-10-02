@@ -4,11 +4,17 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター（完全自動化版）", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="競馬予想AIシミュレーター（収支管理対応版）", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 自動ペース判定・3連複配分")
+st.title("競馬予想AIシミュレーター ＆ 収支ダッシュボード")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動3連複予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
+# タブの構成に「📈 収支ダッシュボード」を追加
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🚀 シミュレーション＆自動3連複", 
+    "📊 結果照合・自動判定検証", 
+    "🛠️ 出馬表データ整形ツール", 
+    "📈 収支ダッシュボード"
+])
 
 with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 完全自動ペース予測")
@@ -38,7 +44,7 @@ with tab1:
 
   col_btn1, col_btn2 = st.columns([0.8, 0.2])
   with col_btn2:
-    if st.button("🗑️ 一括削除", type="secondary"):
+    if st.button("🗑️️ 一括削除", type="secondary"):
       st.session_state.pasted_csv = ""
       st.rerun()
 
@@ -122,15 +128,11 @@ with tab1:
       with st.spinner("AIがレース展開を自動判定・解析中..."):
         df_res = df_input.copy()
 
-        # 出馬表の脚質構成からペースを自動判定
         nige_senko_count = 0
-        sashi_tsui_count = 0
         for _, row in df_res.iterrows():
           kyaku = str(row["脚質"])
           if any(k in kyaku for k in ["逃", "先行"]):
             nige_senko_count += 1
-          elif any(k in kyaku for k in ["差", "追"]):
-            sashi_tsui_count += 1
 
         total_horses = len(df_res)
         if nige_senko_count <= max(1, total_horses * 0.2):
@@ -465,3 +467,64 @@ with tab3:
         st.warning("有効な行が見つかりませんでした。データ形式を確認してください。")
     else:
       st.warning("テキストが入力されていません。")
+
+with tab4:
+  st.header("📈 収支ダッシュボード ＆ 回収率分析")
+  st.write("これまでのレース結果や馬券の投資・回収実績を記録し、収支の推移をグラフで確認できます。")
+
+  # セッションステートで収支データを保持
+  if "df_balance" not in st.session_state:
+    st.session_state.df_balance = pd.DataFrame(columns=[
+        "日付", "競馬場", "レース", "券種", "投資額(円", "払戻額(円)"
+    ])
+
+  with st.form("balance_form"):
+    st.subheader("➕ 収支データの追加")
+    col_b1, col_b2, col_b3 = st.columns(3)
+    with col_b1:
+      b_date = st.text_input("日付", value="2026-09-20")
+      b_track = st.text_input("競馬場", value="阪神")
+    with col_b2:
+      b_race = st.text_input("レース番号", value="1R")
+      b_type = st.selectbox("券種", options=["3連複", "ワイド", "馬連", "単勝", "その他"])
+    with col_b3:
+      b_invest = st.number_input("投資額 (円)", min_value=100, value=1000, step=100)
+      b_return = st.number_input("払戻額 (円)", min_value=0, value=0, step=100)
+
+    submitted = st.form_submit_button("📝 収支データを登録する")
+    if submitted:
+      new_row = pd.DataFrame([{
+          "日付": b_date,
+          "競馬場": b_track,
+          "レース": b_race,
+          "券種": b_type,
+          "投資額(円": b_invest,
+          "払戻額(円)": b_return
+      }])
+      st.session_state.df_balance = pd.concat([st.session_state.df_balance, new_row], ignore_index=True)
+      st.success("収支データを追加しました！")
+
+  df_bal = st.session_state.df_balance
+  if not df_bal.empty:
+    st.subheader("📊 成績サマリー")
+    total_invest = df_bal["投資額(円"].sum()
+    total_return = df_bal["払戻額(円)"].sum()
+    net_profit = total_return - total_invest
+    overall_roi = (total_return / total_invest * 100) if total_invest > 0 else 0
+
+    mcol1, mcol2, mcol3, mcol4 = st.columns(4)
+    mcol1.metric("総投資額", f"{total_invest:,} 円")
+    mcol2.metric("総払戻額", f"{total_return:,} 円")
+    mcol3.metric("トータル収支", f"{net_profit:,} 円", delta=f"{net_profit:,} 円")
+    mcol4.metric("回収率", f"{overall_roi:.1f} %")
+
+    st.subheader("📋 収支履歴一覧")
+    st.dataframe(df_bal, use_container_width=True)
+
+    # 簡易的な収支推移の折れ線グラフ
+    df_bal["収支"] = df_bal["払戻額(円)"] - df_bal["投資額(円"]
+    df_bal["累計収支"] = df_bal["収支"].cumsum()
+    st.subheader("📈 累計収支の推移グラフ")
+    st.line_chart(df_bal["累計収支"])
+  else:
+    st.info("まだ収支データが登録されていません。上のフォームからデータを追加してください。")
