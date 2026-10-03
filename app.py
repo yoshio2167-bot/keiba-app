@@ -6,27 +6,23 @@ import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 高精度回収率フィルター")
+st.title("競馬予想AIシミュレーター ＆ ペース自動判定版")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆予想", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動ペース", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 展開・ペース選択")
+  st.header("モンテカルロ・シミュレーション ＆ 完全自動ペース予測")
   st.write(
-      "出馬表CSVを貼り付け、レースの「展開（ペース）」や「シミュレーション回数」を設定して高速に予想を実行できます。"
+      "出馬表CSVを貼り付けて予算を設定するだけで、AIがレースのペースを自動判定し、最適な3連複買い目と資金配分を算出します。"
   )
 
   col_s1, col_s2, col_s3 = st.columns(3)
   with col_s1:
-    pace_mode = st.selectbox(
-        "🏇 展開・ペース予測",
-        options=["平均ペース（バランス型）", "スローペース（前残・先行有利）", "ハイ・タフ（差し・追込有利）"],
-        index=0
-    )
-  with col_s2:
     threshold_roi = st.slider("🎯 勝負見送りライン（期待回収率 % 未満をパス）", min_value=100, max_value=200, value=120, step=10)
-  with col_s3:
+  with col_s2:
     sim_count_input = st.selectbox("🔄 シミュレーション回数", options=["1回（一発ガチ予想）", "100回", "300回", "500回"], index=1)
+  with col_s3:
+    total_budget = st.number_input("💰 投資予算 (円)", min_value=500, max_value=50000, value=2000, step=500)
 
   if "1回" in sim_count_input:
     sim_count = 1
@@ -51,7 +47,7 @@ with tab1:
       value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/20,阪神,1R,芝1400m(良),2歳未勝利,1,ルクスルーラー,1人気,2.3,先,34.5,0,1-0-0-0,武豊,55.0"
+          "2026/09/20,阪神,1R,障2970m(晴 良),障害3歳以上未勝利,11,クロライナ,11人気,44.4,差,0,0,0-0-0-0-6,五十嵐雄,60.0"
       ),
       height=180,
   )
@@ -121,10 +117,25 @@ with tab1:
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 高速シミュレーション＆予想を実行", type="primary"):
+  if st.button("🚀 自動ペース判定 ＆ 予想を実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("高速解析中..."):
+      with st.spinner("AIがレース展開を自動判定・解析中..."):
         df_res = df_input.copy()
+
+        # --- 🤖 ペース自動判定ロジック ---
+        nige_senko_count = 0
+        for _, row in df_res.iterrows():
+          kyaku = str(row["脚質"])
+          if any(k in kyaku for k in ["逃", "先行"]):
+            nige_senko_count += 1
+
+        total_horses = len(df_res)
+        if nige_senko_count <= max(1, total_horses * 0.2):
+          auto_pace_name = "スローペース（前残・先行有利）"
+        elif nige_senko_count >= total_horses * 0.5:
+          auto_pace_name = "ハイ・タフペース（差し・追込有利）"
+        else:
+          auto_pace_name = "平均ペース（バランス型）"
 
         def calc_enhanced_score(row):
           try:
@@ -143,10 +154,10 @@ with tab1:
             pass
 
           kyaku = str(row["脚質"])
-          if "スロー" in pace_mode:
+          if "スロー" in auto_pace_name:
             if any(k in kyaku for k in ["逃", "先行"]):
               base_score += 15.0
-          elif "ハイ・タフ" in pace_mode:
+          elif "ハイ・タフ" in auto_pace_name:
             if any(k in kyaku for k in ["差", "追"]):
               base_score += 18.0
 
@@ -191,6 +202,8 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
+        # 判定結果の表示
+        st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
         st.subheader("📊 予想・ランキング結果")
         
         display_cols = [
@@ -209,6 +222,8 @@ with tab1:
         top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
         top2 = df_ranked.iloc[1] if len(df_ranked) > 1 else None
         top3 = df_ranked.iloc[2] if len(df_ranked) > 2 else None
+        top4 = df_ranked.iloc[3] if len(df_ranked) > 3 else None
+        top5 = df_ranked.iloc[4] if len(df_ranked) > 4 else None
 
         top1_str = f"◎{top1['馬番']}番 {top1['馬名']}" if top1 is not None else ""
         top2_str = f"〇{top2['馬番']}番 {top2['馬名']}" if top2 is not None else ""
@@ -218,7 +233,15 @@ with tab1:
         wide_1 = f"◎{top1['馬番']} - 〇{top2['馬番']}" if top1 is not None and top2 is not None else ""
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
-        three_renpuku_focus = f"【推奨3連複軸2頭流し】 軸: ◎{top1['馬番']} ＆ 〇{top2['馬番']} － 相手: ▲{top3['馬番']} 他"
+
+        num_bets_3ren = 3
+        bet_amount_per_point = max(100, int((total_budget / 100 / num_bets_3ren) * 100))
+        three_renpuku_focus = (
+            f"【推奨3連複 軸2頭流し（全3点）】\n"
+            f"  軸: ◎{top1['馬番']}番 ＆ 〇{top2['馬番']}番\n"
+            f"  相手: ▲{top3['馬番']}番, {top4['馬番']}番, {top5['馬番']}番\n"
+            f"  💡 **資金配分**: 1点あたり **{bet_amount_per_point}円** （合計投資: {bet_amount_per_point * num_bets_3ren}円）"
+        )
 
         try:
           roi_val_num = float(str(top1["AI期待回収率_str"]).replace("%", ""))
@@ -270,11 +293,21 @@ with tab1:
         st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
         st.code(sim_copy_text, language="text")
 
-        st.subheader("🎯 勝負判定 ＆ 推奨買い目インフォ")
+        st.subheader("🎯 勝負判定 ＆ 自動3連複・資金配分インフォ")
         if roi_val_num >= threshold_roi:
-          st.success(f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n{three_renpuku_focus}\n\n※期待値が高いため、ワイド2点や3連複軸2頭流しで高回収を狙えます。")
+          st.success(
+              f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n"
+              f"{strict_buy_focus}\n\n"
+              f"{three_renpuku_focus}\n\n"
+              f"※期待値が高いため、ワイドおよび3連複軸2頭流しで高回収を狙えます。"
+          )
         else:
-          st.warning(f"⚠️ **【見送り推奨 / パス】（期待回収率: {top1['AI期待回収率_str']} ＜ 設定基準 {threshold_roi}%）**\n\n{strict_buy_focus}\n\n{three_renpuku_focus}\n\n※期待回収率が基準未満です。無駄な投資を避けるため、このレースは見送り（パス）が賢明です。")
+          st.warning(
+              f"⚠️ **【見送り推奨 / パス】（期待回収率: {top1['AI期待回収率_str']} ＜ 設定基準 {threshold_roi}%）**\n\n"
+              f"{strict_buy_focus}\n\n"
+              f"{three_renpuku_focus}\n\n"
+              f"※期待回収率が基準未満です。無駄な投資を避けるため、このレースは見送り（パス）が賢明です。"
+          )
     else:
       st.warning("データが入力されていません。CSVデータを貼り付けてください。")
 
