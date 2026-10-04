@@ -6,14 +6,14 @@ import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 5頭的中率特化版")
+st.title("競馬予想AIシミュレーター ＆ 高精度チューニング版")
 
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動ペース", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス的中率強化")
+  st.header("モンテカルロ・シミュレーション ＆ 高精度AI予想")
   st.write(
-      "出馬表CSVを貼り付けるだけで、末脚（上がり3F）や近走実績のウェイトを高めたAIがレース展開を自動判定し、最適な5頭ボックス・3連複買い目を算出します。"
+      "出馬表CSVを貼り付けるだけで、末脚・近走着順・穴馬妙味を多角的に解析する高精度AIがレース展開を自動判定し、最適な5頭ボックス買い目を算出します。"
   )
 
   col_s1, col_s2, col_s3 = st.columns(3)
@@ -47,7 +47,7 @@ with tab1:
       value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/20,阪神,1R,芝1400m(良),2歳未勝利,1,ルクスルーラー,1人気,2.3,先,34.5,0,1-0-0-0,武豊,55.0"
+          "2026/10/04,東京,11R,芝1800m(曇 良),毎日王冠,2,リアライズシリウス,1人気,2.0,先行,33.8,85,1-1-1-2,ルメール,57.0"
       ),
       height=180,
   )
@@ -117,9 +117,9 @@ with tab1:
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 的中率特化・解析を実行", type="primary"):
+  if st.button("🚀 高精度AI解析・予想を実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("的中率・回収率を高精度チューニング中..."):
+      with st.spinner("高精度アルゴリズムでレース展開を解析中..."):
         df_res = df_input.copy()
 
         # --- 🤖 ペース自動判定ロジック ---
@@ -137,55 +137,68 @@ with tab1:
         else:
           auto_pace_name = "平均ペース（バランス型）"
 
-        # --- 🎯 的中率・5頭選抜を強化したスコア計算 ---
-        def calc_enhanced_score(row):
+        # --- 🎯 高精度スコア計算ロジック（的中率・回収率の最適化） ---
+        def calc_high_precision_score(row):
           try:
             odds = float(row["オッズ_num"])
             if odds <= 0: odds = 10.0
           except:
             odds = 10.0
           
-          # 基礎スコア（オッズ妙味と人気バランス）
-          base_score = max(10.0, 160.0 / (np.log(odds + 1.0) + 0.7))
-          
-          # 上がり3Fの評価ウェイトを強化（末脚の確実性を反映）
           try:
-            f_val = float(row["上がり3F_val"])
-            if 30.0 <= f_val <= 42.0:
-              # 数値が小さい（速い）ほどボーナスを大きくする
-              base_score += (42.0 - f_val) * 9.0
+            pop = float(row["人気_num"])
           except:
-            pass
+            pop = 5.0
 
-          # スピード指数のボーナス加算
+          # 基礎スコア
+          base_score = max(10.0, 150.0 / (np.log(odds + 1.0) + 0.6))
+          
+          # 1. 穴馬発掘補正（人気に対して能力指数が高い馬にボーナス）
           try:
             s_val = float(row["speed_val"])
             if s_val > 0:
-              base_score += s_val * 0.5
+              base_score += s_val * 0.8
+              # 人気薄（6人気以降）で指数が高い場合は激走ボーナスを追加
+              if pop >= 6:
+                base_score += 12.0
           except:
             pass
 
-          # 展開（ペース）補正
+          # 2. 上がり3F（末脚）の強化補正
+          try:
+            f_val = float(row["上がり3F_val"])
+            if 30.0 <= f_val <= 42.0:
+              base_score += (42.0 - f_val) * 10.0
+          except:
+            pass
+
+          # 3. 展開（ペース）補正
           kyaku = str(row["脚質"])
           if "スロー" in auto_pace_name:
             if any(k in kyaku for k in ["逃", "先行"]):
-              base_score += 18.0
+              base_score += 20.0
           elif "ハイ・タフ" in auto_pace_name:
             if any(k in kyaku for k in ["差", "追"]):
-              base_score += 20.0
+              base_score += 22.0
 
-          # 近走5走成績の安定感補正
+          # 4. 近走安定感補正（前走の着順を重視）
           try:
             rec = str(row["近走5走成績"])
-            first_num = int(rec.split("-")[0]) if "-" in rec and rec.split("-")[0].isdigit() else 5
-            if first_num <= 3:
-              base_score += (4 - first_num) * 4.0
+            parts_rec = [p for p in rec.split("-") if p.isdigit()]
+            if len(parts_rec) > 0:
+              recent_rank = int(parts_rec[0])
+              if recent_rank == 1:
+                base_score += 15.0
+              elif recent_rank <= 3:
+                base_score += 8.0
+              elif recent_rank >= 10:
+                base_score -= 8.0
           except:
             pass
 
           return base_score
 
-        df_res["ベース評価"] = df_res.apply(calc_enhanced_score, axis=1)
+        df_res["ベース評価"] = df_res.apply(calc_high_precision_score, axis=1)
 
         win_counts = np.zeros(len(df_res))
         place_counts = np.zeros(len(df_res))
@@ -193,7 +206,7 @@ with tab1:
         np.random.seed(42)
         scores_arr = df_res["ベース評価"].values
         actual_sims = max(1, sim_count)
-        noise_scale = 0.0 if actual_sims == 1 else np.mean(scores_arr) * 0.35
+        noise_scale = 0.0 if actual_sims == 1 else np.mean(scores_arr) * 0.3
 
         for _ in range(actual_sims):
           noise = np.random.normal(0, noise_scale, size=len(df_res))
@@ -217,26 +230,24 @@ with tab1:
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
         st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
-        st.subheader("📊 予想・ランキング結果（上位5頭の網羅性を強化）")
+        st.subheader("📊 高精度予想・ランキング結果（上位5頭の網羅性を最適化）")
         
         display_cols = [
             "開催地", "レース番号", "距離・馬場", "レース条件",
             "馬番", "馬名", "人気", "単勝オッズ",
-            "シミュ勝率_str", "シミュ複勝率_str", "AI期待回収率_str", "脚質", "上がり3F", "騎手"
+            "シミュ勝率_str", "シミュ複勝率_str", "AI期待回収率_str", "脚質", "上がり3F", "スピード指数", "騎手"
         ]
         available_cols = [c for c in display_cols if c in df_ranked.columns]
         df_display = df_ranked[available_cols]
         st.dataframe(df_display, use_container_width=True, height=250)
 
-        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "阪神"
+        kaisai_title = str(df_display["開催地"].iloc[0]) if not df_display["開催地"].empty else "東京"
         r_num_title = str(df_ranked["レース番号"].iloc[0]) if not df_ranked["レース番号"].empty else "11R"
         file_prefix = f"{kaisai_title}{r_num_title}"
 
         top1 = df_ranked.iloc[0] if len(df_ranked) > 0 else None
         top2 = df_ranked.iloc[1] if len(df_ranked) > 1 else None
         top3 = df_ranked.iloc[2] if len(df_ranked) > 2 else None
-        top4 = df_ranked.iloc[3] if len(df_ranked) > 3 else None
-        top5 = df_ranked.iloc[4] if len(df_ranked) > 4 else None
 
         top1_str = f"◎{top1['馬番']}番 {top1['馬名']}" if top1 is not None else ""
         top2_str = f"〇{top2['馬番']}番 {top2['馬名']}" if top2 is not None else ""
@@ -247,13 +258,11 @@ with tab1:
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
 
-        # 5頭ボックス（10点）の資金配分計算
         num_bets_5box = 10
         bet_amount_5box = max(100, int((total_budget / 100 / num_bets_5box) * 100))
-        
         box_horses_str = ", ".join([f"{df_ranked.iloc[i]['馬番']}番({df_ranked.iloc[i]['馬名']})" for i in range(min(5, len(df_ranked)))])
         three_renpuku_focus = (
-            f"【推奨3連複 5頭ボックス（全10点） ※的中率特化】\n"
+            f"【推奨3連複 5頭ボックス（全10点） ※高精度的中型】\n"
             f"  対象馬: {box_horses_str}\n"
             f"  💡 **資金配分**: 1点あたり **{bet_amount_5box}円** （合計投資: {bet_amount_5box * num_bets_5box}円）"
         )
@@ -314,7 +323,7 @@ with tab1:
               f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n"
               f"{strict_buy_focus}\n\n"
               f"{three_renpuku_focus}\n\n"
-              f"※期待値が高いため、5頭ボックスによる手堅い的中と高回収を狙えます。"
+              f"※高精度アルゴリズムによる5頭ボックスで高い的中率と回収率を狙えます。"
           )
         else:
           st.warning(
@@ -341,10 +350,10 @@ with tab2:
         for _, row in df_saved.iterrows()
     ]
 
-    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026-09-20"
-    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "阪神"
+    date_val = str(df_saved["日付"].iloc[0]) if "日付" in df_saved.columns and not df_saved["日付"].empty else "2026-10-04"
+    kaisai_val = str(df_saved["開催地"].iloc[0]) if "開催地" in df_saved.columns and not df_saved["開催地"].empty else "東京"
     r_num_val = str(df_saved["レース番号"].iloc[0]) if "レース番号" in df_saved.columns and not df_saved["レース番号"].empty else "11R"
-    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1200m(良)"
+    dist_val = str(df_saved["距離・馬場"].iloc[0]) if "距離・馬場" in df_saved.columns and not df_saved["距離・馬場"].empty else "芝1800m(良)"
     cond_val = str(df_saved["レース条件"].iloc[0]) if "レース条件" in df_saved.columns and not df_saved["レース条件"].empty else "オープン"
 
     top1_row = df_saved.iloc[0]
@@ -434,13 +443,13 @@ with tab3:
 
   raw_txt = st.text_area(
       "ここにカンマ区切りの出馬表データを貼り付け",
-      placeholder="2026-09-20,阪神,11R,芝1200m(良),オープン,1,ルクスルーラー...",
+      placeholder="2026-10-04,東京,11R,芝1800m(曇 良),毎日王冠,2,リアライズシリウス...",
       height=150,
   )
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.setInput()] if hasattr(str, 'setInput') else [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
         parts = [p.strip() for p in line.split(",") if p.strip()]
