@@ -6,14 +6,14 @@ import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ ペース自動判定版")
+st.title("競馬予想AIシミュレーター ＆ 5頭的中率特化版")
 
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動ペース", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 完全自動ペース予測")
+  st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス的中率強化")
   st.write(
-      "出馬表CSVを貼り付けて予算を設定するだけで、AIがレースのペースを自動判定し、最適な3連複買い目と資金配分を算出します。"
+      "出馬表CSVを貼り付けるだけで、末脚（上がり3F）や近走実績のウェイトを高めたAIがレース展開を自動判定し、最適な5頭ボックス・3連複買い目を算出します。"
   )
 
   col_s1, col_s2, col_s3 = st.columns(3)
@@ -47,7 +47,7 @@ with tab1:
       value=st.session_state.pasted_csv,
       placeholder=(
           "日付,開催地,レース番号,距離・馬場,レース条件,馬番,馬名,人気,単勝オッズ,脚質,上がり3F,スピード指数,近走5走成績,騎手,斤量\n"
-          "2026/09/20,阪神,1R,障2970m(晴 良),障害3歳以上未勝利,11,クロライナ,11人気,44.4,差,0,0,0-0-0-0-6,五十嵐雄,60.0"
+          "2026/09/20,阪神,1R,芝1400m(良),2歳未勝利,1,ルクスルーラー,1人気,2.3,先,34.5,0,1-0-0-0,武豊,55.0"
       ),
       height=180,
   )
@@ -117,9 +117,9 @@ with tab1:
     except Exception as e:
       st.info("CSVデータを貼り付けるとここにプレビューが表示されます。")
 
-  if st.button("🚀 自動ペース判定 ＆ 予想を実行", type="primary"):
+  if st.button("🚀 的中率特化・解析を実行", type="primary"):
     if df_input is not None and not df_input.empty:
-      with st.spinner("AIがレース展開を自動判定・解析中..."):
+      with st.spinner("的中率・回収率を高精度チューニング中..."):
         df_res = df_input.copy()
 
         # --- 🤖 ペース自動判定ロジック ---
@@ -137,6 +137,7 @@ with tab1:
         else:
           auto_pace_name = "平均ペース（バランス型）"
 
+        # --- 🎯 的中率・5頭選抜を強化したスコア計算 ---
         def calc_enhanced_score(row):
           try:
             odds = float(row["オッズ_num"])
@@ -144,28 +145,41 @@ with tab1:
           except:
             odds = 10.0
           
+          # 基礎スコア（オッズ妙味と人気バランス）
           base_score = max(10.0, 160.0 / (np.log(odds + 1.0) + 0.7))
           
+          # 上がり3Fの評価ウェイトを強化（末脚の確実性を反映）
           try:
             f_val = float(row["上がり3F_val"])
             if 30.0 <= f_val <= 42.0:
-              base_score += (40.0 - f_val) * 7.0
+              # 数値が小さい（速い）ほどボーナスを大きくする
+              base_score += (42.0 - f_val) * 9.0
           except:
             pass
 
+          # スピード指数のボーナス加算
+          try:
+            s_val = float(row["speed_val"])
+            if s_val > 0:
+              base_score += s_val * 0.5
+          except:
+            pass
+
+          # 展開（ペース）補正
           kyaku = str(row["脚質"])
           if "スロー" in auto_pace_name:
             if any(k in kyaku for k in ["逃", "先行"]):
-              base_score += 15.0
+              base_score += 18.0
           elif "ハイ・タフ" in auto_pace_name:
             if any(k in kyaku for k in ["差", "追"]):
-              base_score += 18.0
+              base_score += 20.0
 
+          # 近走5走成績の安定感補正
           try:
             rec = str(row["近走5走成績"])
             first_num = int(rec.split("-")[0]) if "-" in rec and rec.split("-")[0].isdigit() else 5
             if first_num <= 3:
-              base_score += (4 - first_num) * 3.0
+              base_score += (4 - first_num) * 4.0
           except:
             pass
 
@@ -179,7 +193,7 @@ with tab1:
         np.random.seed(42)
         scores_arr = df_res["ベース評価"].values
         actual_sims = max(1, sim_count)
-        noise_scale = 0.0 if actual_sims == 1 else np.mean(scores_arr) * 0.4
+        noise_scale = 0.0 if actual_sims == 1 else np.mean(scores_arr) * 0.35
 
         for _ in range(actual_sims):
           noise = np.random.normal(0, noise_scale, size=len(df_res))
@@ -202,9 +216,8 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
-        # 判定結果の表示
         st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
-        st.subheader("📊 予想・ランキング結果")
+        st.subheader("📊 予想・ランキング結果（上位5頭の網羅性を強化）")
         
         display_cols = [
             "開催地", "レース番号", "距離・馬場", "レース条件",
@@ -234,13 +247,15 @@ with tab1:
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
 
-        num_bets_3ren = 3
-        bet_amount_per_point = max(100, int((total_budget / 100 / num_bets_3ren) * 100))
+        # 5頭ボックス（10点）の資金配分計算
+        num_bets_5box = 10
+        bet_amount_5box = max(100, int((total_budget / 100 / num_bets_5box) * 100))
+        
+        box_horses_str = ", ".join([f"{df_ranked.iloc[i]['馬番']}番({df_ranked.iloc[i]['馬名']})" for i in range(min(5, len(df_ranked)))])
         three_renpuku_focus = (
-            f"【推奨3連複 軸2頭流し（全3点）】\n"
-            f"  軸: ◎{top1['馬番']}番 ＆ 〇{top2['馬番']}番\n"
-            f"  相手: ▲{top3['馬番']}番, {top4['馬番']}番, {top5['馬番']}番\n"
-            f"  💡 **資金配分**: 1点あたり **{bet_amount_per_point}円** （合計投資: {bet_amount_per_point * num_bets_3ren}円）"
+            f"【推奨3連複 5頭ボックス（全10点） ※的中率特化】\n"
+            f"  対象馬: {box_horses_str}\n"
+            f"  💡 **資金配分**: 1点あたり **{bet_amount_5box}円** （合計投資: {bet_amount_5box * num_bets_5box}円）"
         )
 
         try:
@@ -293,13 +308,13 @@ with tab1:
         st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
         st.code(sim_copy_text, language="text")
 
-        st.subheader("🎯 勝負判定 ＆ 自動3連複・資金配分インフォ")
+        st.subheader("🎯 勝負判定 ＆ 5頭ボックス買い目インフォ")
         if roi_val_num >= threshold_roi:
           st.success(
               f"🔥 **【勝負レース推奨】（期待回収率: {top1['AI期待回収率_str']} ＞ 設定基準 {threshold_roi}%）**\n\n"
               f"{strict_buy_focus}\n\n"
               f"{three_renpuku_focus}\n\n"
-              f"※期待値が高いため、ワイドおよび3連複軸2頭流しで高回収を狙えます。"
+              f"※期待値が高いため、5頭ボックスによる手堅い的中と高回収を狙えます。"
           )
         else:
           st.warning(
@@ -425,7 +440,7 @@ with tab3:
 
   if st.button("✨ 完璧なCSVに変換する"):
     if raw_txt:
-      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.setInput()] if hasattr(str, 'setInput') else [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
       parsed_rows = []
       for line in lines:
         parts = [p.strip() for p in line.split(",") if p.strip()]
