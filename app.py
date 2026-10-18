@@ -4,15 +4,16 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 収支管理", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ スプレッドシート対応版")
+st.title("競馬予想AIシミュレーター ＆ 収支管理ボード")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動ペース", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
+# タブ構成を拡張（収支管理タブを追加）
+tab1, tab2, tab3, tab4 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "💰 netkeiba風My収支", "🛠️ データ整形"])
 
 with tab1:
-  st.header("モンテカルロ・シミュレーション ＆ 高精度AI予想")
-  st.write("出馬表CSVを貼り付けてボタンを押すだけで、高速に展開予測と5頭ボックス買い目を算出します。")
+  st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス")
+  st.write("出馬表CSVを貼り付けてボタンを押すだけで、高速に展開予測と5頭ボックス買い目、即PAT用リストを算出します。")
 
   col_s1, col_s2, col_s3 = st.columns(3)
   with col_s1:
@@ -244,8 +245,22 @@ with tab1:
         num_bets_5box = 10
         bet_amount_5box = max(100, int((total_budget / 100 / num_bets_5box) * 100))
         
-        # 上位5頭のリスト文字列
         ai_top5_list_str = " / ".join([f"{df_ranked.iloc[i]['馬番']}番 {df_ranked.iloc[i]['馬名']}" for i in range(min(5, len(df_ranked)))])
+        
+        top5_df_rows = [df_ranked.iloc[i] for i in range(min(5, len(df_ranked)))]
+        top5_nums_int = []
+        for r in top5_df_rows:
+          try:
+            top5_nums_int.append(int(r["馬番"]))
+          except:
+            pass
+        
+        ipat_lines = []
+        from itertools import combinations
+        if len(top5_nums_int) >= 3:
+          for combo in combinations(sorted(top5_nums_int), 3):
+            ipat_lines.append(f"{combo[0]}-{combo[1]}-{combo[2]}  ({bet_amount_5box}円)")
+        ipat_text_block = "\n".join(ipat_lines)
 
         three_renpuku_focus = (
             f"【推奨3連複 5頭ボックス（全10点）】\n"
@@ -296,12 +311,11 @@ with tab1:
             mime="text/csv",
         )
 
-        tsv_buffer = StringIO()
-        df_export_final.to_csv(tsv_buffer, sep="\t", index=False)
-        sim_copy_text = tsv_buffer.getvalue()
+        st.markdown("### 📋 即PAT入力用買い目リスト（ワンクリックコピー）")
+        st.code(ipat_text_block, language="text")
 
         st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
-        st.code(sim_copy_text, language="text")
+        st.code(StringIO(df_export_final.to_csv(sep="\t", index=False)).getvalue(), language="text")
 
         st.subheader("🎯 勝負判定 ＆ 5頭ボックス買い目インフォ")
         if roi_val_num >= threshold_roi:
@@ -337,7 +351,6 @@ with tab2:
     place_rate_val = str(top1_row.get("シミュ複勝率", top1_row.get("シミュ複勝率_str", "0%")))
     roi_val = str(top1_row.get("AI期待回収率", top1_row.get("AI期待回収率_str", "0%")))
 
-    # AI上位5頭のリストを取得
     ai_top5_list = []
     for i in range(min(5, len(df_saved))):
       h_num = str(df_saved.iloc[i].get("馬番"))
@@ -347,7 +360,6 @@ with tab2:
     top5_display_str = " / ".join([f"{item['num']}番 {item['name']}" for item in ai_top5_list])
 
     st.subheader("2. 実際のレース結果（1〜3着）を選択")
-    st.write("▼ 実際の着順に該当する馬をタップしてください（選択式）")
     
     select_options = ["選択してください"] + horse_options
 
@@ -401,7 +413,6 @@ with tab2:
         else:
           st.warning(f"❌ **【自動判定】 {auto_memo}**")
 
-        # スプレッドシート用出力テキスト（AI上位5頭予想と的中判定を反映）
         sheet_row_text = (
             f"{date_val}\t{kaisai_val}\t{r_num_val}\t{dist_val}\t{cond_val}\t{top5_display_str}\t{win_rate_val}\t{place_rate_val}\t{roi_val}\t{actual_1st}\t{actual_2nd}\t{actual_3rd}\t{auto_memo}"
         )
@@ -413,6 +424,78 @@ with tab2:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
 with tab3:
+  st.header("💰 netkeiba風 My収支ダッシュボード")
+  st.write("本日の収支サマリーとレースごとの詳細履歴を確認できます。")
+
+  # セッションステートに収支データリストを保持
+  if "balance_records" not in st.session_state:
+    st.session_state.balance_records = [
+        {"race": "京都 12R", "purchase": 2000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス (200円×10点)"},
+        {"race": "東京 8R", "purchase": 1000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス (100円×10点)"},
+        {"race": "東京 7R", "purchase": 1000, "payout": 1100, "status": "的中", "details": "3連複 5頭ボックス (100円×10点)"},
+        {"race": "東京 3R", "purchase": 400, "payout": 860, "status": "的中", "details": "ワイド (400円)"},
+    ]
+
+  # --- サマリー計算 ---
+  total_purchase = sum([r["purchase"] for r in st.session_state.balance_records])
+  total_payout = sum([r["payout"] for r in st.session_state.balance_records])
+  total_balance = total_payout - total_purchase
+
+  # netkeiba風ダッシュボードカード
+  st.markdown("---")
+  col_sum1, col_sum2, col_sum3 = st.columns(3)
+  with col_sum1:
+    st.metric(label="🛒 総購入金額", value=f"{total_purchase:,} 円")
+  with col_sum2:
+    st.metric(label="🎯 総払戻金", value=f"{total_payout:,} 円")
+  with col_sum3:
+    balance_label = f"✨ 収支合計: {total_balance:,} 円" if total_balance >= 0 else f"⚠️ 収支合計: {total_balance:,} 円"
+    st.metric(label="📊 トータル収支", value=f"{total_balance:,} 円", delta=f"{total_balance:,} 円")
+
+  st.markdown("---")
+  st.subheader("📝 レース別収支詳細リスト")
+
+  # 新規収支データの追加フォーム
+  with st.expander("➕ 新しいレースの収支を追加する"):
+    with st.form("add_balance_form"):
+      f_race = st.text_input("レース名 (例: 京都 11R)", value="阪神 11R")
+      f_purchase = st.number_input("購入金額 (円)", min_value=100, value=1000, step=100)
+      f_payout = st.number_input("払戻金額 (円)", min_value=0, value=0, step=100)
+      f_details = st.text_input("買い目・メモ (例: 5頭ボックス 10点)", value="3連複 5頭ボックス")
+      
+      submitted = st.form_submit_button("追加する")
+      if submitted:
+        status_str = "的中" if f_payout > 0 else "外れ"
+        st.session_state.balance_records.append({
+            "race": f_race,
+            "purchase": int(f_purchase),
+            "payout": int(f_payout),
+            "status": status_str,
+            "details": f_details
+        })
+        st.success(f"{f_race} の収支を追加しました！")
+        st.rerun()
+
+  # レース一覧表示
+  for idx, rec in enumerate(st.session_state.balance_records):
+    box_color = "🟢" if rec["payout"] > 0 else "🔴"
+    with st.container():
+      col_a, col_b, col_c = st.columns([0.4, 0.3, 0.3])
+      with col_a:
+        st.markdown(f"**{box_color} {rec['race']}**")
+        st.caption(rec["details"])
+      with col_b:
+        st.text(f"購入: {rec['purchase']:,}円")
+      with col_c:
+        st.text(f"払戻: {rec['payout']:,}円")
+      
+      # 削除ボタン
+      if st.button(f"🗑️ 削除 #{idx+1}", key=f"del_{idx}"):
+        st.session_state.balance_records.pop(idx)
+        st.rerun()
+      st.markdown("---")
+
+with tab4:
   st.header("🛠️ 出馬表テキスト・CSV整形ツール")
   st.write("カンマ区切りの出馬表データをここに貼り付けると、15列の正しいフォーマットに完璧に整えます。")
 
