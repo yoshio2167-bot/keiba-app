@@ -450,13 +450,32 @@ with tab3:
   st.markdown("---")
   st.subheader("📝 レース別収支詳細リスト")
 
-  with st.expander("➕ 新しいレースの収支を追加する"):
+  with st.expander("➕ 新しいレースの収支を追加する（選択式）"):
     with st.form("add_balance_form"):
       f_date = st.text_input("日付 (例: 2026-10-18)", value="2026-10-18")
-      f_race = st.text_input("レース名 (例: 京都 11R)", value="阪神 11R")
+      
+      # --- 💡 レース名・買い目をセレクトボックス（選択式）に変更 ---
+      race_options = [
+          "東京 1R", "東京 2R", "東京 3R", "東京 4R", "東京 5R", "東京 6R", 
+          "東京 7R", "東京 8R", "東京 9R", "東京 10R", "東京 11R 毎日王冠", "東京 12R",
+          "京都 1R", "京都 2R", "京都 3R", "京都 4R", "京都 5R", "京都 6R", 
+          "京都 7R", "京都 8R", "京都 9R", "京都 10R", "京都 11R", "京都 12R 桂川S",
+          "阪神 1R", "阪神 2R", "阪神 3R", "阪神 11R", "阪神 12R",
+          "中山 1R", "中山 11R", "中山 12R"
+      ]
+      f_race = st.selectbox("レース名を選択", options=race_options)
+
       f_purchase = st.number_input("購入金額 (円)", min_value=100, value=1000, step=100)
       f_payout = st.number_input("払戻金額 (円)", min_value=0, value=0, step=100)
-      f_details = st.text_input("買い目・メモ (例: 5頭ボックス 10点)", value="3連複 5頭ボックス")
+
+      detail_options = [
+          "3連複 5頭ボックス",
+          "3連複 軸2頭流し",
+          "ワイド 2点",
+          "単勝・複勝",
+          "馬連ボックス"
+      ]
+      f_details = st.selectbox("買い目・メモを選択", options=detail_options)
       
       submitted = st.form_submit_button("追加する")
       if submitted:
@@ -472,7 +491,6 @@ with tab3:
         st.success(f"{f_race} の収支を追加しました！")
         st.rerun()
 
-  # --- 💡 スプレッドシート用コピーデータの生成 ---
   df_balance = pd.DataFrame(st.session_state.balance_records)
   if not df_balance.empty:
     df_balance["収支"] = df_balance["payout"] - df_balance["purchase"]
