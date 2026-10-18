@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(page_title="競馬予想AIシミュレーター", layout="wide", initial_sidebar_state="collapsed")
 
-st.title("競馬予想AIシミュレーター ＆ 高速軽量版")
+st.title("競馬予想AIシミュレーター ＆ タップ選択専用版")
 
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション＆自動ペース", "📊 結果照合・自動判定検証", "🛠️ 出馬表データ整形ツール"])
 
@@ -354,14 +354,18 @@ with tab2:
     ai_top3_str = f"{t1} / {t2} / {t3}"
 
     st.subheader("2. 実際のレース結果（1〜3着）を選択")
-    st.write("▼ 実際の着順に該当する馬をタップしてください（選択式）")
+    st.write("▼ 実際の着順に該当する馬をタップしてください（キーボードが出ない選択式）")
     
     select_options = ["選択してください"] + horse_options
 
-    actual_1st = st.selectbox("🥇 実際の1着馬", options=select_options, index=0, key="sel_1st")
-    actual_2nd = st.selectbox("🥈 実際の2着馬", options=select_options, index=0, key="sel_2nd")
-    actual_3rd = st.selectbox("🥉 実際の3着馬", options=select_options, index=0, key="sel_3rd")
+    # --- 💡 キーボードが一切出ないラジオボタン方式に変更 ---
+    actual_1st = st.radio("🥇 実際の1着馬", options=select_options, key="rad_1st")
+    st.markdown("---")
+    actual_2nd = st.radio("🥈 実際の2着馬", options=select_options, key="rad_2nd")
+    st.markdown("---")
+    actual_3rd = st.radio("🥉 実際の3着馬", options=select_options, key="rad_3rd")
 
+    st.markdown("---")
     if st.button("🔍 検証結果を自動判定する"):
       if actual_1st == "選択してください" or actual_2nd == "選択してください" or actual_3rd == "選択してください":
         st.warning("実際の1着〜3着馬すべてを選択してください。")
