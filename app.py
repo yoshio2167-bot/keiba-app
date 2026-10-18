@@ -454,7 +454,6 @@ with tab3:
     with st.form("add_balance_form"):
       f_date = st.text_input("日付 (例: 2026-10-18)", value="2026-10-18")
       
-      # --- 💡 開催地とレース番号を完全に分けた選択式 ---
       col_f1, col_f2 = st.columns(2)
       with col_f1:
         loc_options = ["東京", "京都", "阪神", "中山", "新潟", "中京", "福島", "小倉", "札幌", "函館"]
@@ -483,3 +482,96 @@ with tab3:
         st.session_state.balance_records.append({
             "date": f_date,
             "race": f_race,
+            "purchase": int(f_purchase),
+            "payout": int(f_payout),
+            "status": status_str,
+            "details": f_details
+        })
+        st.success(f"{f_race} の収支を追加しました！")
+        st.rerun()
+
+  df_balance = pd.DataFrame(st.session_state.balance_records)
+  if not df_balance.empty:
+    df_balance["収支"] = df_balance["payout"] - df_balance["purchase"]
+    tsv_buffer = StringIO()
+    df_balance.to_csv(tsv_buffer, sep="\t", index=False)
+    balance_copy_text = tsv_buffer.getvalue()
+
+    st.markdown("### 📋 収支スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
+    st.code(balance_copy_text, language="text")
+
+    csv_data = df_balance.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="📥 収支履歴をCSVでダウンロード",
+        data=csv_data,
+        file_name="race_balance_history.csv",
+        mime="text/csv",
+    )
+
+  st.markdown("---")
+  for idx, rec in enumerate(st.session_state.balance_records):
+    box_color = "🟢" if rec["payout"] > 0 else "🔴"
+    with st.container():
+      col_a, col_b, col_c = st.columns([0.4, 0.3, 0.3])
+      with col_a:
+        st.markdown(f"**{box_color} {rec['race']}** ({rec['date']})")
+        st.caption(rec["details"])
+      with col_b:
+        st.text(f"購入: {rec['purchase']:,}円")
+      with col_c:
+        st.text(f"払戻: {rec['payout']:,}円")
+      
+      if st.button(f"🗑️ 削除 #{idx+1}", key=f"del_{idx}"):
+        st.session_state.balance_records.pop(idx)
+        st.rerun()
+      st.markdown("---")
+
+with tab4:
+  st.header("🛠️ 出馬表テキスト・CSV整形ツール")
+  st.write("カンマ区切りの出馬表データをここに貼り付けると、15列の正しいフォーマットに完璧に整えます。")
+
+  raw_txt = st.text_area(
+      "ここにカンマ区切りの出馬表データを貼り付け",
+      placeholder="2026-10-18,京都,12R,ダ1400m(良),3歳以上2勝クラス...",
+      height=150,
+  )
+
+  if st.button("✨ 完璧なCSVに変換する"):
+    if raw_txt:
+      lines = [l.strip() for l in raw_txt.strip().split("\n") if l.strip()]
+      parsed_rows = []
+      for line in lines:
+        parts = [p.strip() for p in line.split(",") if p.strip()]
+        if len(parts) >= 15:
+          parsed_rows.append({
+              "日付": parts[0],
+              "開催地": parts[1],
+              "レース番号": parts[2],
+              "距離・馬場": parts[3],
+              "レース条件": parts[4],
+              "馬番": parts[5],
+              "馬名": parts[6],
+              "人気": parts[7],
+              "単勝オッズ": parts[8],
+              "脚質": parts[9],
+              "上がり3F": parts[10],
+              "スピード指数": parts[11],
+              "近走5走成績": parts[12],
+              "騎手": parts[13],
+              "斤量": parts[14],
+          })
+
+      if parsed_rows:
+        df_converted = pd.DataFrame(parsed_rows)
+        cols_order = [
+            "日付", "開催地", "レース番号", "距離・馬場", "レース条件",
+            "馬番", "馬名", "人気", "単勝オッズ",
+            "脚質", "上がり3F", "スピード指数", "近走5走成績", "騎手", "斤量"
+        ]
+        csv_text = df_converted[cols_order].to_csv(index=False)
+        st.success("変換が完了しました！下のボックスをコピーしてTab1に貼り付けてください。")
+        st.text_area("整形済みCSV出力（ワンタップ選択）", value=csv_text, height=150)
+      else:
+        st.warning("有効な行が見つかりませんでした。データ形式を確認してください。")
+    else:
+      st.warning("テキストが入力されていません。")
