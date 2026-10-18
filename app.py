@@ -8,7 +8,6 @@ st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 収支管
 
 st.title("競馬予想AIシミュレーター ＆ 収支管理ボード")
 
-# タブ構成を拡張（収支管理タブを追加）
 tab1, tab2, tab3, tab4 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "💰 netkeiba風My収支", "🛠️ データ整形"])
 
 with tab1:
@@ -425,23 +424,20 @@ with tab2:
 
 with tab3:
   st.header("💰 netkeiba風 My収支ダッシュボード")
-  st.write("本日の収支サマリーとレースごとの詳細履歴を確認できます。")
+  st.write("本日の収支サマリーとレースごとの詳細履歴を確認できます。スプレッドシートへの一括コピーも可能です。")
 
-  # セッションステートに収支データリストを保持
   if "balance_records" not in st.session_state:
     st.session_state.balance_records = [
-        {"race": "京都 12R", "purchase": 2000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス (200円×10点)"},
-        {"race": "東京 8R", "purchase": 1000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス (100円×10点)"},
-        {"race": "東京 7R", "purchase": 1000, "payout": 1100, "status": "的中", "details": "3連複 5頭ボックス (100円×10点)"},
-        {"race": "東京 3R", "purchase": 400, "payout": 860, "status": "的中", "details": "ワイド (400円)"},
+        {"date": "2026-10-18", "race": "京都 12R", "purchase": 2000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス"},
+        {"date": "2026-10-18", "race": "東京 8R", "purchase": 1000, "payout": 0, "status": "外れ", "details": "3連複 5頭ボックス"},
+        {"date": "2026-10-18", "race": "東京 7R", "purchase": 1000, "payout": 1100, "status": "的中", "details": "3連複 5頭ボックス"},
+        {"date": "2026-10-18", "race": "東京 3R", "purchase": 400, "payout": 860, "status": "的中", "details": "ワイド"},
     ]
 
-  # --- サマリー計算 ---
   total_purchase = sum([r["purchase"] for r in st.session_state.balance_records])
   total_payout = sum([r["payout"] for r in st.session_state.balance_records])
   total_balance = total_payout - total_purchase
 
-  # netkeiba風ダッシュボードカード
   st.markdown("---")
   col_sum1, col_sum2, col_sum3 = st.columns(3)
   with col_sum1:
@@ -449,15 +445,14 @@ with tab3:
   with col_sum2:
     st.metric(label="🎯 総払戻金", value=f"{total_payout:,} 円")
   with col_sum3:
-    balance_label = f"✨ 収支合計: {total_balance:,} 円" if total_balance >= 0 else f"⚠️ 収支合計: {total_balance:,} 円"
     st.metric(label="📊 トータル収支", value=f"{total_balance:,} 円", delta=f"{total_balance:,} 円")
 
   st.markdown("---")
   st.subheader("📝 レース別収支詳細リスト")
 
-  # 新規収支データの追加フォーム
   with st.expander("➕ 新しいレースの収支を追加する"):
     with st.form("add_balance_form"):
+      f_date = st.text_input("日付 (例: 2026-10-18)", value="2026-10-18")
       f_race = st.text_input("レース名 (例: 京都 11R)", value="阪神 11R")
       f_purchase = st.number_input("購入金額 (円)", min_value=100, value=1000, step=100)
       f_payout = st.number_input("払戻金額 (円)", min_value=0, value=0, step=100)
@@ -467,6 +462,7 @@ with tab3:
       if submitted:
         status_str = "的中" if f_payout > 0 else "外れ"
         st.session_state.balance_records.append({
+            "date": f_date,
             "race": f_race,
             "purchase": int(f_purchase),
             "payout": int(f_payout),
@@ -476,20 +472,38 @@ with tab3:
         st.success(f"{f_race} の収支を追加しました！")
         st.rerun()
 
-  # レース一覧表示
+  # --- 💡 スプレッドシート用コピーデータの生成 ---
+  df_balance = pd.DataFrame(st.session_state.balance_records)
+  if not df_balance.empty:
+    df_balance["収支"] = df_balance["payout"] - df_balance["purchase"]
+    tsv_buffer = StringIO()
+    df_balance.to_csv(tsv_buffer, sep="\t", index=False)
+    balance_copy_text = tsv_buffer.getvalue()
+
+    st.markdown("### 📋 収支スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
+    st.code(balance_copy_text, language="text")
+
+    csv_data = df_balance.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="📥 収支履歴をCSVでダウンロード",
+        data=csv_data,
+        file_name="race_balance_history.csv",
+        mime="text/csv",
+    )
+
+  st.markdown("---")
   for idx, rec in enumerate(st.session_state.balance_records):
     box_color = "🟢" if rec["payout"] > 0 else "🔴"
     with st.container():
       col_a, col_b, col_c = st.columns([0.4, 0.3, 0.3])
       with col_a:
-        st.markdown(f"**{box_color} {rec['race']}**")
+        st.markdown(f"**{box_color} {rec['race']}** ({rec['date']})")
         st.caption(rec["details"])
       with col_b:
         st.text(f"購入: {rec['purchase']:,}円")
       with col_c:
         st.text(f"払戻: {rec['payout']:,}円")
       
-      # 削除ボタン
       if st.button(f"🗑️ 削除 #{idx+1}", key=f"del_{idx}"):
         st.session_state.balance_records.pop(idx)
         st.rerun()
