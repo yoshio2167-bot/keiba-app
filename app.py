@@ -3,13 +3,13 @@ import re
 import numpy as np
 import pandas as pd
 import streamlit as st
+from itertools import combinations
 
 st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 予想家比較ボード", layout="wide", initial_sidebar_state="collapsed")
 
 st.title("競馬予想AIシミュレーター ＆ 予想家比較ボード")
 
-# --- ご要望に応じて「My収支」「データ整形」を外し、プロ予想家入力タブを追加 ---
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "📝 プロ予想家入力"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "📝 プロ予想家入力・連動"])
 
 with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス")
@@ -213,6 +213,10 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
+        # セッションステートにシミュレーション結果を保存してTab3と連動させる
+        st.session_state.df_ranked = df_ranked
+        st.session_state.total_budget = total_budget
+
         st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
         st.subheader("📊 高精度予想・ランキング結果（上位5頭）")
         
@@ -236,8 +240,7 @@ with tab1:
         top1_str = f"◎{top1['馬番']}番 {top1['馬名']}" if top1 is not None else ""
         top2_str = f"〇{top2['馬番']}番 {top2['馬名']}" if top2 is not None else ""
         top3_str = f"▲{top3['馬番']}番 {top3['馬名']}" if top3 is not None else ""
-        ai_top3_combined = f"{top1_str} / {top2_str} / {top3_str}"
-
+        
         wide_1 = f"◎{top1['馬番']} - 〇{top2['馬番']}" if top1 is not None and top2 is not None else ""
         wide_2 = f"◎{top1['馬番']} - ▲{top3['馬番']}" if top1 is not None and top3 is not None else ""
         strict_buy_focus = f"【推奨ワイド2点】 {wide_1} / {wide_2}"
@@ -256,7 +259,6 @@ with tab1:
             pass
         
         ipat_lines = []
-        from itertools import combinations
         if len(top5_nums_int) >= 3:
           for combo in combinations(sorted(top5_nums_int), 3):
             ipat_lines.append(f"{combo[0]}-{combo[1]}-{combo[2]}  ({bet_amount_5box}円)")
@@ -423,43 +425,97 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- 追加されたプロ予想家入力タブ（スマホでプルダウン式選択） ---
+# --- Tab 3: シミュレーション結果と完全連動するプロ予想家入力タブ ---
 with tab3:
-  st.header("📝 プロ予想家・SNS予想 入力")
-  st.info("SNSやプロ馬券師の予想（上位6頭）をプルダウンで選択し、AI予想と比較・検証します。")
+  st.header("📝 プロ予想家・SNS予想 入力＆連動検証")
+  st.info("Tab1でシミュレーションを実行すると、その出走馬データがここに自動で連動し、プルダウンから上位馬を選択できます。")
 
-  horse_candidates = [
-      "1番", "2番", "3番", "4番", "5番", 
-      "6番", "7番", "8番", "9番", "10番", 
-      "11番", "12番", "13番", "14番", "15番", "16番", "17番", "18番"
-  ]
+  if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
+    df_r = st.session_state.df_ranked
+    # 実際のレース馬一覧を作成（馬番＋馬名）
+    horse_candidates_real = [f"{row['馬番']}番 {row['馬名']}" for _, row in df_r.iterrows()]
 
-  st.subheader("💡 プロ予想家 上位6頭セレクト（完全プルダウン式）")
-  st.write("スマホのキーボードを開かず、タップだけで素早く入力できます。")
+    st.subheader("💡 読み込まれたレースの馬から上位6頭セレクト（完全プルダウン式）")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+      p_1st = st.selectbox("◎ 本命 (1番手)", ["選択してください"] + horse_candidates_real, key="pro_1")
+      p_2nd = st.selectbox("○ 対抗 (2番手)", ["選択してください"] + horse_candidates_real, key="pro_2")
+      p_3rd = st.selectbox("▲ 単穴 (3番手)", ["選択してください"] + horse_candidates_real, key="pro_3")
+    with col2:
+      p_4th = st.selectbox("△ 連下1 (4番手)", ["選択してください"] + horse_candidates_real, key="pro_4")
+      p_5th = st.selectbox("× 連下2 (5番手)", ["選択してください"] + horse_candidates_real, key="pro_5")
+      p_6th = st.selectbox("☆ 注目 (6番手)", ["選択してください"] + horse_candidates_real, key="pro_6")
+        
+    pro_strategy = st.selectbox(
+        "検証する買い方", 
+        [
+            "ワイド 5頭ボックス (10点)", 
+            "ワイド 1番人気外し4頭ボックス (6点)", 
+            "3連複 1頭軸5頭流し (10点)",
+            "3連複 5頭ボックス (10点)"
+        ], 
+        key="pro_strat"
+    )
 
-  col1, col2 = st.columns(2)
-  with col1:
-    p_1st = st.selectbox("◎ 本命 (1番手)", ["選択してください"] + horse_candidates, key="pro_1")
-    p_2nd = st.selectbox("○ 対抗 (2番手)", ["選択してください"] + horse_candidates, key="pro_2")
-    p_3rd = st.selectbox("▲ 単穴 (3番手)", ["選択してください"] + horse_candidates, key="pro_3")
-  with col2:
-    p_4th = st.selectbox("△ 連下1 (4番手)", ["選択してください"] + horse_candidates, key="pro_4")
-    p_5th = st.selectbox("× 連下2 (5番手)", ["選択してください"] + horse_candidates, key="pro_5")
-    p_6th = st.selectbox("☆ 注目 (6番手)", ["選択してください"] + horse_candidates, key="pro_6")
+    if st.button("🔄 プロ予想の買い目を反映・計算"):
+      selected_picks_raw = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
       
-  pro_strategy = st.selectbox("検証する買い方", ["ワイド 5頭ボックス (10点)", "ワイド 1番人気外し4頭ボックス (6点)", "3連複 1頭軸5頭流し (10点)"], key="pro_strat")
+      if len(selected_picks_raw) < 3:
+        st.error("最低3頭以上を選択してください。")
+      else:
+        # 馬番のみを綺麗に抽出
+        selected_nums = []
+        for p in selected_picks_raw:
+          m = re.match(r"^(\d+)番", p)
+          if m:
+            selected_nums.append(int(m.group(1)))
 
-  if st.button("🔄 プロ予想の買い目を反映・シミュレーション"):
-    selected_picks = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
-    if len(selected_picks) < 3:
-      st.error("最低3頭以上を選択してください。")
-    else:
-      st.success(f"プロ予想の上位馬（{len(selected_picks)}頭）で買い目を構成しました！")
-      st.write("**選択された馬番:**", selected_picks)
-      st.write(f"**適用した戦術:** {pro_strategy}")
-      
-      st.markdown("---")
-      st.subheader("📊 プロ予想家シミュレーション結果（仮算定）")
-      col_a, col_b = st.columns(2)
-      col_a.metric("想定投資額", "1,000円")
-      col_b.metric("想定回収予測", "的中判定待ち")
+        st.success(f"プロ予想の上位馬（{len(selected_nums)}頭）で買い目を構成しました！")
+        st.write("**選択された馬番:**", selected_nums)
+        st.write(f"**適用した戦術:** {pro_strategy}")
+
+        # 戦術に応じた点数計算とIPAT文字列の生成
+        budget_val = st.session_state.get("total_budget", 2000)
+        
+        if "ワイド" in pro_strategy and "5頭" in pro_strategy:
+          box_horses = selected_nums[:5]
+          pts = 10
+          combos = list(combinations(sorted(box_horses), 2))
+        elif "ワイド" in pro_strategy and "1番人気外し" in pro_strategy:
+          # 仮にリストの先頭を1番人気とみなす、またはそのまま4頭ボックス
+          box_horses = selected_nums[:4]
+          pts = 6
+          combos = list(combinations(sorted(box_horses), 2))
+        elif "3連複" in pro_strategy and "1頭軸" in pro_strategy:
+          axis = selected_nums[0]
+          opp = selected_nums[1:6] # 相手5頭
+          pts = 10
+          combos = [(axis, c[0], c[1]) for c in combinations(sorted(opp), 2)]
+        else: # 3連複 5頭ボックス
+          box_horses = selected_nums[:5]
+          pts = 10
+          combos = list(combinations(sorted(box_horses), 3))
+
+        bet_amt = max(100, int((budget_val / 100 / pts) * 100))
+        total_inv = pts * bet_amt
+
+        ipat_list = []
+        for c in combos:
+          if len(c) == 2:
+            ipat_list.append(f"{c[0]}-{c[1]}  ({bet_amt}円)")
+          else:
+            ipat_list.append(f"{c[0]}-{c[1]}-{c[2]}  ({bet_amt}円)")
+
+        st.markdown("---")
+        st.subheader("📊 プロ予想家シミュレーション結果")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("想定投資額", f"{total_inv:,} 円")
+        col_b.metric("買い目点数", f"{pts} 点")
+        col_c.metric("1点あたり金額", f"{bet_amt} 円")
+
+        st.markdown("### 📋 即PAT入力用買い目リスト（プロ予想版）")
+        st.code("\n".join(ipat_list), language="text")
+
+  else:
+    st.info("⚠️ まだTab1で「高精度AI解析・予想を実行」が行われていません。まずはTab1でシミュレーションを実行してください。")
