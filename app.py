@@ -441,4 +441,35 @@ with tab3:
       p_2nd = st.selectbox("○ 対抗 (2番手)", ["選択してください"] + horse_candidates_real, key="pro_2")
       p_3rd = st.selectbox("▲ 単穴 (3番手)", ["選択してください"] + horse_candidates_real, key="pro_3")
     with col2:
-      p_4th = st.selectbox("△ 連下1 (4番手)", ["選択してください"] + horse_candidates_
+      p_4th = st.selectbox("△ 連下1 (4番手)", ["選択してください"] + horse_candidates_real, key="pro_4")
+      p_5th = st.selectbox("× 連下2 (5番手)", ["選択してください"] + horse_candidates_real, key="pro_5")
+      p_6th = st.selectbox("☆ 注目 (6番手)", ["選択してください"] + horse_candidates_real, key="pro_6")
+        
+    pro_strategy = st.selectbox(
+        "検証する買い方", 
+        [
+            "3連複 6頭ボックス (20点)",
+            "3連複 5頭ボックス (10点)", 
+            "ワイド 5頭ボックス (10点)", 
+            "ワイド 1番人気外し4頭ボックス (6点)", 
+            "3連複 1頭軸5頭流し (10点)"
+        ], 
+        key="pro_strat"
+    )
+
+    st.markdown("---")
+    st.subheader("2. 実際のレース結果（1〜3着）を選択")
+    res_options = ["選択してください"] + horse_candidates_real
+    pro_act_1st = st.selectbox("🥇 実際の1着馬", options=res_options, key="pro_act_1")
+    pro_act_2nd = st.selectbox("🥈 実際の2着馬", options=res_options, key="pro_act_2")
+    pro_act_3rd = st.selectbox("🥉 実際の3着馬", options=res_options, key="pro_act_3")
+
+    if st.button("🔄 プロ予想の買い目生成 ＆ 的中判定を実行", type="primary"):
+      selected_picks_raw = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
+      
+      if len(selected_picks_raw) < 3:
+        st.error("最低3頭以上を選択してください。")
+      else:
+        selected_nums = []
+        for p in selected_picks_raw:
+          m = re.match(r"^(\
