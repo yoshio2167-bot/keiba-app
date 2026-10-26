@@ -9,7 +9,7 @@ st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 予想家
 
 st.title("競馬予想AIシミュレーター ＆ 予想家比較ボード")
 
-tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "📝 プロ予想家入力・連動"])
+tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "📝 予想比較・合算ハイブリッド"])
 
 with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス")
@@ -424,10 +424,10 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（ラジオボタン選択式に改善） ---
+# --- Tab 3: 予想比較 ＆ 合算ハイブリッド検証 ---
 with tab3:
-  st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
-  st.info("Tab1でシミュレーションを実行すると馬データが連動します。タップ選択式で上位6頭を選び、実際の1〜3着馬と照合して的中判定が行えます。")
+  st.header("📝 予想比較 ＆ 合算ハイブリッド検証ボード")
+  st.info("「AI単体」「プロ予想単体」、さらに両者の推奨馬を掛け合わせた「合算ハイブリッド」のふた通り以上の買い目を比較・検証できます。")
 
   if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
     df_r = st.session_state.df_ranked
@@ -439,84 +439,105 @@ with tab3:
     st.subheader("1. プロ予想家 上位6頭セレクト（選択式）")
     sel_options_pro = ["選択してください"] + horse_candidates_real
 
-    p_1st = st.radio("◎ 本命 (1番手)", options=sel_options_pro, key="pro_radio_1")
+    p_1st = st.radio("◎ 本命 (1番手)", options=sel_options_pro, key="hybrid_pro_1")
     st.markdown("---")
-    p_2nd = st.radio("○ 対抗 (2番手)", options=sel_options_pro, key="pro_radio_2")
+    p_2nd = st.radio("○ 対抗 (2番手)", options=sel_options_pro, key="hybrid_pro_2")
     st.markdown("---")
-    p_3rd = st.radio("▲ 単穴 (3番手)", options=sel_options_pro, key="pro_radio_3")
+    p_3rd = st.radio("▲ 単穴 (3番手)", options=sel_options_pro, key="hybrid_pro_3")
     st.markdown("---")
-    p_4th = st.radio("△ 連下1 (4番手)", options=sel_options_pro, key="pro_radio_4")
+    p_4th = st.radio("△ 連下1 (4番手)", options=sel_options_pro, key="hybrid_pro_4")
     st.markdown("---")
-    p_5th = st.radio("× 連下2 (5番手)", options=sel_options_pro, key="pro_radio_5")
+    p_5th = st.radio("× 連下2 (5番手)", options=sel_options_pro, key="hybrid_pro_5")
     st.markdown("---")
-    p_6th = st.radio("☆ 注目 (6番手)", options=sel_options_pro, key="pro_radio_6")
+    p_6th = st.radio("☆ 注目 (6番手)", options=sel_options_pro, key="hybrid_pro_6")
 
     st.markdown("---")
-    pro_strategy = st.selectbox(
-        "検証する買い方", 
+    st.subheader("2. 検証・比較する予想モードの選択")
+    compare_mode = st.selectbox(
+        "モード切り替え",
         [
-            "3連複 6頭ボックス (20点)",
+            "🔥 【合算】AI上位馬 ＋ プロ予想の融合ハイブリッド（重複統合ボックス）",
+            "📝 プロ予想単体（3連複 6頭ボックス）",
+            "🤖 AIシミュレーション単体（上位5頭ボックス）"
+        ],
+        key="compare_mode_sel"
+    )
+
+    pro_strategy = st.selectbox(
+        "基本の買い方フォーマット", 
+        [
+            "3連複 6頭（または合算馬）ボックス",
             "3連複 5頭ボックス (10点)", 
             "ワイド 5頭ボックス (10点)", 
-            "ワイド 1番人気外し4頭ボックス (6点)", 
-            "3連複 1頭軸5頭流し (10点)"
+            "ワイド 1番人気外し4頭ボックス (6点)"
         ], 
-        key="pro_strat"
+        key="hybrid_strat"
     )
 
     st.markdown("---")
-    st.subheader("2. 実際のレース結果（1〜3着）を選択")
-    pro_act_1st = st.radio("🥇 実際の1着馬", options=sel_options_pro, key="pro_act_radio_1")
+    st.subheader("3. 実際のレース結果（1〜3着）を選択")
+    pro_act_1st = st.radio("🥇 実際の1着馬", options=sel_options_pro, key="hybrid_act_1")
     st.markdown("---")
-    pro_act_2nd = st.radio("🥈 実際の2着馬", options=sel_options_pro, key="pro_act_radio_2")
+    pro_act_2nd = st.radio("🥈 実際の2着馬", options=sel_options_pro, key="hybrid_act_2")
     st.markdown("---")
-    pro_act_3rd = st.radio("🥉 実際の3着馬", options=sel_options_pro, key="pro_act_radio_3")
+    pro_act_3rd = st.radio("🥉 実際の3着馬", options=sel_options_pro, key="hybrid_act_3")
 
-    if st.button("🔄 プロ予想の買い目生成 ＆ 的中判定を実行", type="primary"):
+    if st.button("🔄 選択モードで買い目生成 ＆ 的中判定を実行", type="primary"):
       selected_picks_raw = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
       
-      if len(selected_picks_raw) < 3:
-        st.error("最低3頭以上を選択してください。")
+      if len(selected_picks_raw) < 3 and "プロ予想単体" in compare_mode:
+        st.error("プロ予想モードでは最低3頭以上を選択してください。")
       else:
-        selected_nums = []
+        # プロ予想の馬番リスト
+        pro_nums = []
         for p in selected_picks_raw:
           digits = "".join([c for c in str(p).split("番")[0] if c.isdigit()])
           if digits:
-            selected_nums.append(int(digits))
+            pro_nums.append(int(digits))
 
-        budget_val = st.session_state.get("total_budget", 2000)
-        
-        if "3連複 6頭ボックス" in pro_strategy:
-          box_horses = selected_nums[:6]
-          pts = 20
-          combos = list(combinations(sorted(box_horses), 3))
-          bet_type_flag = "sanrenpuku"
-        elif "3連複 5頭ボックス" in pro_strategy:
-          box_horses = selected_nums[:5]
-          pts = 10
-          combos = list(combinations(sorted(box_horses), 3))
-          bet_type_flag = "sanrenpuku"
-        elif "ワイド" in pro_strategy and "5頭" in pro_strategy:
-          box_horses = selected_nums[:5]
-          pts = 10
-          combos = list(combinations(sorted(box_horses), 2))
+        # AI上位馬の馬番リスト（上位5頭）
+        ai_nums = []
+        for i in range(min(5, len(df_r))):
+          try:
+            ai_nums.append(int(df_r.iloc[i]["馬番"]))
+          except:
+            pass
+
+        # モードごとの対象馬選定
+        if "合算" in compare_mode:
+          # AI上位5頭とプロ予想馬をマージして重複を排除（最大10頭程度、順序維持）
+          combined_list = []
+          for n in ai_nums + pro_nums:
+            if n not in combined_list:
+              combined_list.append(n)
+          target_horses = combined_list[:6] # 最大6頭までに絞る、またはそのまま拡張
+          mode_title = "🔥 AI ＋ プロ予想 合算ハイブリッド"
+        elif "プロ予想単体" in compare_mode:
+          target_horses = pro_nums[:6]
+          mode_title = "📝 プロ予想単体"
+        else:
+          target_horses = ai_nums[:5]
+          mode_title = "🤖 AIシミュレーション単体"
+
+        # 買い目の組み合わせ生成
+        if "ワイド" in pro_strategy and "5頭" in pro_strategy:
+          box_h = target_horses[:5]
+          pts = len(list(combinations(box_h, 2)))
+          combos = list(combinations(sorted(box_h), 2))
           bet_type_flag = "wide"
         elif "ワイド" in pro_strategy and "1番人気外し" in pro_strategy:
-          box_horses = selected_nums[:4]
-          pts = 6
-          combos = list(combinations(sorted(box_horses), 2))
+          box_h = target_horses[:4]
+          pts = len(list(combinations(box_h, 2)))
+          combos = list(combinations(sorted(box_h), 2))
           bet_type_flag = "wide"
-        else:
-          axis = selected_nums[0] if selected_nums else 1
-          opp = selected_nums[:6]
-          if axis in opp:
-            opp.remove(axis)
-          opp = opp[:5]
-          pts = 10
-          combos = [(axis, c[0], c[1]) for c in combinations(sorted(opp), 2)]
+        else: # 3連複ボックス系
+          box_h = target_horses[:6] if len(target_horses) >= 6 else target_horses[:5]
+          pts = len(list(combinations(box_h, 3)))
+          combos = list(combinations(sorted(box_h), 3))
           bet_type_flag = "sanrenpuku"
 
-        bet_amt = max(100, int((budget_val / 100 / pts) * 100))
+        budget_val = st.session_state.get("total_budget", 2000)
+        bet_amt = max(100, int((budget_val / 100 / max(1, pts)) * 100))
         total_inv = pts * bet_amt
 
         def parse_num(sel):
@@ -532,7 +553,6 @@ with tab3:
 
         if a1 and a2 and a3:
           actual_top3_set = {a1, a2, a3}
-          
           if bet_type_flag == "wide":
             for c in combos:
               if c[0] in actual_top3_set and c[1] in actual_top3_set:
@@ -547,7 +567,9 @@ with tab3:
                 break
 
         st.markdown("---")
-        st.subheader("📊 プロ予想家 連動判定結果")
+        st.subheader(f"📊 比較結果: {mode_title}")
+        st.write(f"**対象となった馬番リスト**: {target_horses}")
+
         col_a, col_b, col_c = st.columns(3)
         col_a.metric("想定投資額", f"{total_inv:,} 円")
         col_b.metric("買い目点数", f"{pts} 点")
@@ -555,10 +577,10 @@ with tab3:
         if a1 and a2 and a3:
           if is_hit:
             col_c.metric("判定結果", "🎉 的中！", delta="Hit")
-            st.success(f"🎉 おめでとうございます！ プロ予想の買い目（{hit_combo_str}）が的中しました！")
+            st.success(f"🎉 おめでとうございます！ {mode_title}の買い目（{hit_combo_str}）が的中しました！")
           else:
             col_c.metric("判定結果", "❌ 外れ", delta="-100%", delta_color="inverse")
-            st.warning("❌ 残念ながら今回のプロ予想の買い目はハズレとなりました。")
+            st.warning(f"❌ 残念ながら今回の{mode_title}の買い目はハズレとなりました。")
         else:
           col_c.metric("判定結果", "判定待ち", delta="結果未入力")
           st.info("実際の1〜3着馬を選択すると、自動で的中判定が行われます。")
@@ -570,7 +592,7 @@ with tab3:
           else:
             ipat_list.append(f"{c[0]}-{c[1]}-{c[2]}  ({bet_amt}円)")
 
-        st.markdown("### 📋 即PAT入力用買い目リスト（プロ予想版）")
+        st.markdown("### 📋 即PAT入力用買い目リスト")
         st.code("\n".join(ipat_list), language="text")
 
   else:
