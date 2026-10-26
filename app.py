@@ -424,7 +424,7 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（6頭ボックス対応版・安全性向上） ---
+# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（6頭ボックス対応版・完全修復） ---
 with tab3:
   st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
   st.info("Tab1でシミュレーションを実行すると馬データが連動します。プルダウンで6頭を選び、実際の1〜3着馬を選択することで、プロ予想（6頭ボックス等）の的中判定が行えます。")
@@ -524,4 +524,47 @@ with tab3:
         hit_combo_str = ""
 
         if a1 and a2 and a3:
-          actual_top3_
+          actual_top3_set = {a1, a2, a3}
+          
+          if bet_type_flag == "wide":
+            for c in combos:
+              if c[0] in actual_top3_set and c[1] in actual_top3_set:
+                is_hit = True
+                hit_combo_str = f"{c[0]}-{c[1]}"
+                break
+          else:
+            for c in combos:
+              if set(c) == actual_top3_set:
+                is_hit = True
+                hit_combo_str = f"{c[0]}-{c[1]}-{c[2]}"
+                break
+
+        st.markdown("---")
+        st.subheader("📊 プロ予想家 連動判定結果")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("想定投資額", f"{total_inv:,} 円")
+        col_b.metric("買い目点数", f"{pts} 点")
+        
+        if a1 and a2 and a3:
+          if is_hit:
+            col_c.metric("判定結果", "🎉 的中！", delta="Hit")
+            st.success(f"🎉 おめでとうございます！ プロ予想の買い目（{hit_combo_str}）が的中しました！")
+          else:
+            col_c.metric("判定結果", "❌ 外れ", delta="-100%", delta_color="inverse")
+            st.warning("❌ 残念ながら今回のプロ予想の買い目はハズレとなりました。")
+        else:
+          col_c.metric("判定結果", "判定待ち", delta="結果未入力")
+          st.info("実際の1〜3着馬を選択すると、自動で的中判定が行われます。")
+
+        ipat_list = []
+        for c in combos:
+          if len(c) == 2:
+            ipat_list.append(f"{c[0]}-{c[1]}  ({bet_amt}円)")
+          else:
+            ipat_list.append(f"{c[0]}-{c[1]}-{c[2]}  ({bet_amt}円)")
+
+        st.markdown("### 📋 即PAT入力用買い目リスト（プロ予想版）")
+        st.code("\n".join(ipat_list), language="text")
+
+  else:
+    st.info("⚠️ まだTab1で「高精度AI解析・予想を実行」が行われていません。まずはTab1でシミュレーションを実行してください。")
