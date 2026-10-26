@@ -424,27 +424,34 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（6頭ボックス対応版・完全修復） ---
+# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（ラジオボタン選択式に改善） ---
 with tab3:
   st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
-  st.info("Tab1でシミュレーションを実行すると馬データが連動します。プルダウンで6頭を選び、実際の1〜3着馬を選択することで、プロ予想（6頭ボックス等）の的中判定が行えます。")
+  st.info("Tab1でシミュレーションを実行すると馬データが連動します。タップ選択式で上位6頭を選び、実際の1〜3着馬と照合して的中判定が行えます。")
 
   if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
     df_r = st.session_state.df_ranked
-    horse_candidates_real = [f"{row['馬番']}番 {row['馬名']}" for _, row in df_r.iterrows()]
+    horse_candidates_real = [
+        f"{row.get('馬番')}番 {row.get('馬名')} ({row.get('人気')}・単勝{row.get('単勝オッズ')}倍)"
+        for _, row in df_r.iterrows()
+    ]
 
-    st.subheader("1. プロ予想家 上位6頭セレクト（プルダウン式）")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-      p_1st = st.selectbox("◎ 本命 (1番手)", ["選択してください"] + horse_candidates_real, key="pro_1")
-      p_2nd = st.selectbox("○ 対抗 (2番手)", ["選択してください"] + horse_candidates_real, key="pro_2")
-      p_3rd = st.selectbox("▲ 単穴 (3番手)", ["選択してください"] + horse_candidates_real, key="pro_3")
-    with col2:
-      p_4th = st.selectbox("△ 連下1 (4番手)", ["選択してください"] + horse_candidates_real, key="pro_4")
-      p_5th = st.selectbox("× 連下2 (5番手)", ["選択してください"] + horse_candidates_real, key="pro_5")
-      p_6th = st.selectbox("☆ 注目 (6番手)", ["選択してください"] + horse_candidates_real, key="pro_6")
-        
+    st.subheader("1. プロ予想家 上位6頭セレクト（選択式）")
+    sel_options_pro = ["選択してください"] + horse_candidates_real
+
+    p_1st = st.radio("◎ 本命 (1番手)", options=sel_options_pro, key="pro_radio_1")
+    st.markdown("---")
+    p_2nd = st.radio("○ 対抗 (2番手)", options=sel_options_pro, key="pro_radio_2")
+    st.markdown("---")
+    p_3rd = st.radio("▲ 単穴 (3番手)", options=sel_options_pro, key="pro_radio_3")
+    st.markdown("---")
+    p_4th = st.radio("△ 連下1 (4番手)", options=sel_options_pro, key="pro_radio_4")
+    st.markdown("---")
+    p_5th = st.radio("× 連下2 (5番手)", options=sel_options_pro, key="pro_radio_5")
+    st.markdown("---")
+    p_6th = st.radio("☆ 注目 (6番手)", options=sel_options_pro, key="pro_radio_6")
+
+    st.markdown("---")
     pro_strategy = st.selectbox(
         "検証する買い方", 
         [
@@ -459,10 +466,11 @@ with tab3:
 
     st.markdown("---")
     st.subheader("2. 実際のレース結果（1〜3着）を選択")
-    res_options = ["選択してください"] + horse_candidates_real
-    pro_act_1st = st.selectbox("🥇 実際の1着馬", options=res_options, key="pro_act_1")
-    pro_act_2nd = st.selectbox("🥈 実際の2着馬", options=res_options, key="pro_act_2")
-    pro_act_3rd = st.selectbox("🥉 実際の3着馬", options=res_options, key="pro_act_3")
+    pro_act_1st = st.radio("🥇 実際の1着馬", options=sel_options_pro, key="pro_act_radio_1")
+    st.markdown("---")
+    pro_act_2nd = st.radio("🥈 実際の2着馬", options=sel_options_pro, key="pro_act_radio_2")
+    st.markdown("---")
+    pro_act_3rd = st.radio("🥉 実際の3着馬", options=sel_options_pro, key="pro_act_radio_3")
 
     if st.button("🔄 プロ予想の買い目生成 ＆ 的中判定を実行", type="primary"):
       selected_picks_raw = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
@@ -478,7 +486,6 @@ with tab3:
 
         budget_val = st.session_state.get("total_budget", 2000)
         
-        # 買い目の構成と組み合わせ抽出
         if "3連複 6頭ボックス" in pro_strategy:
           box_horses = selected_nums[:6]
           pts = 20
