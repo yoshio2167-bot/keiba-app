@@ -376,8 +376,8 @@ with tab2:
         st.warning("実際の1着〜3着馬すべてを選択してください。")
       else:
         def get_umaban(sel_str):
-          m = re.match(r"^(\d+)番", sel_str.strip())
-          return m.group(1) if m else ""
+          digits = "".join([c for c in str(sel_str).split("番")[0] if c.isdigit()])
+          return digits if digits else ""
 
         actual_nums = [
             get_umaban(actual_1st),
@@ -424,7 +424,7 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（6頭ボックス対応版） ---
+# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（6頭ボックス対応版・安全性向上） ---
 with tab3:
   st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
   st.info("Tab1でシミュレーションを実行すると馬データが連動します。プルダウンで6頭を選び、実際の1〜3着馬を選択することで、プロ予想（6頭ボックス等）の的中判定が行えます。")
@@ -472,4 +472,56 @@ with tab3:
       else:
         selected_nums = []
         for p in selected_picks_raw:
-          m = re.match(r"^(\
+          digits = "".join([c for c in str(p).split("番")[0] if c.isdigit()])
+          if digits:
+            selected_nums.append(int(digits))
+
+        budget_val = st.session_state.get("total_budget", 2000)
+        
+        # 買い目の構成と組み合わせ抽出
+        if "3連複 6頭ボックス" in pro_strategy:
+          box_horses = selected_nums[:6]
+          pts = 20
+          combos = list(combinations(sorted(box_horses), 3))
+          bet_type_flag = "sanrenpuku"
+        elif "3連複 5頭ボックス" in pro_strategy:
+          box_horses = selected_nums[:5]
+          pts = 10
+          combos = list(combinations(sorted(box_horses), 3))
+          bet_type_flag = "sanrenpuku"
+        elif "ワイド" in pro_strategy and "5頭" in pro_strategy:
+          box_horses = selected_nums[:5]
+          pts = 10
+          combos = list(combinations(sorted(box_horses), 2))
+          bet_type_flag = "wide"
+        elif "ワイド" in pro_strategy and "1番人気外し" in pro_strategy:
+          box_horses = selected_nums[:4]
+          pts = 6
+          combos = list(combinations(sorted(box_horses), 2))
+          bet_type_flag = "wide"
+        else:
+          axis = selected_nums[0] if selected_nums else 1
+          opp = selected_nums[:6]
+          if axis in opp:
+            opp.remove(axis)
+          opp = opp[:5]
+          pts = 10
+          combos = [(axis, c[0], c[1]) for c in combinations(sorted(opp), 2)]
+          bet_type_flag = "sanrenpuku"
+
+        bet_amt = max(100, int((budget_val / 100 / pts) * 100))
+        total_inv = pts * bet_amt
+
+        def parse_num(sel):
+          digits = "".join([c for c in str(sel).split("番")[0] if c.isdigit()])
+          return int(digits) if digits else None
+
+        a1 = parse_num(pro_act_1st)
+        a2 = parse_num(pro_act_2nd)
+        a3 = parse_num(pro_act_3rd)
+
+        is_hit = False
+        hit_combo_str = ""
+
+        if a1 and a2 and a3:
+          actual_top3_
