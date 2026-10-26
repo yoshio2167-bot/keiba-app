@@ -213,7 +213,6 @@ with tab1:
         df_res["_win_num"] = raw_win_rate
         df_ranked = df_res.sort_values(by="_win_num", ascending=False).reset_index(drop=True)
 
-        # セッションステートにシミュレーション結果を保存してTab3と連動させる
         st.session_state.df_ranked = df_ranked
         st.session_state.total_budget = total_budget
 
@@ -425,17 +424,16 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: シミュレーション結果と完全連動するプロ予想家入力タブ ---
+# --- Tab 3: プロ予想家入力 ＆ 実際の結果との紐づけ判定（完全版） ---
 with tab3:
-  st.header("📝 プロ予想家・SNS予想 入力＆連動検証")
-  st.info("Tab1でシミュレーションを実行すると、その出走馬データがここに自動で連動し、プルダウンから上位馬を選択できます。")
+  st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
+  st.info("Tab1でシミュレーションを実行すると馬データが連動します。さらに実際の1〜3着馬を選択することで、プロ予想の買い目が的中していたかをその場で自動判定できます。")
 
   if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
     df_r = st.session_state.df_ranked
-    # 実際のレース馬一覧を作成（馬番＋馬名）
     horse_candidates_real = [f"{row['馬番']}番 {row['馬名']}" for _, row in df_r.iterrows()]
 
-    st.subheader("💡 読み込まれたレースの馬から上位6頭セレクト（完全プルダウン式）")
+    st.subheader("1. プロ予想家 上位6頭セレクト（プルダウン式）")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -458,47 +456,100 @@ with tab3:
         key="pro_strat"
     )
 
-    if st.button("🔄 プロ予想の買い目を反映・計算"):
+    st.markdown("---")
+    st.subheader("2. 実際のレース結果（1〜3着）を選択")
+    res_options = ["選択してください"] + horse_candidates_real
+    pro_act_1st = st.selectbox("🥇 実際の1着馬", options=res_options, key="pro_act_1")
+    pro_act_2nd = st.selectbox("🥈 実際の2着馬", options=res_options, key="pro_act_2")
+    pro_act_3rd = st.selectbox("🥉 実際の3着馬", options=res_options, key="pro_act_3")
+
+    if st.button("🔄 プロ予想の買い目生成 ＆ 的中判定を実行", type="primary"):
       selected_picks_raw = [p for p in [p_1st, p_2nd, p_3rd, p_4th, p_5th, p_6th] if p != "選択してください"]
       
       if len(selected_picks_raw) < 3:
         st.error("最低3頭以上を選択してください。")
       else:
-        # 馬番のみを綺麗に抽出
         selected_nums = []
         for p in selected_picks_raw:
           m = re.match(r"^(\d+)番", p)
           if m:
             selected_nums.append(int(m.group(1)))
 
-        st.success(f"プロ予想の上位馬（{len(selected_nums)}頭）で買い目を構成しました！")
-        st.write("**選択された馬番:**", selected_nums)
-        st.write(f"**適用した戦術:** {pro_strategy}")
-
-        # 戦術に応じた点数計算とIPAT文字列の生成
         budget_val = st.session_state.get("total_budget", 2000)
         
+        # 買い目の構成と組み合わせ抽出
         if "ワイド" in pro_strategy and "5頭" in pro_strategy:
           box_horses = selected_nums[:5]
           pts = 10
           combos = list(combinations(sorted(box_horses), 2))
+          bet_type_flag = "wide"
         elif "ワイド" in pro_strategy and "1番人気外し" in pro_strategy:
-          # 仮にリストの先頭を1番人気とみなす、またはそのまま4頭ボックス
           box_horses = selected_nums[:4]
           pts = 6
           combos = list(combinations(sorted(box_horses), 2))
+          bet_type_flag = "wide"
         elif "3連複" in pro_strategy and "1頭軸" in pro_strategy:
           axis = selected_nums[0]
-          opp = selected_nums[1:6] # 相手5頭
+          opp = selected_nums[:6]
+          if axis in opp:
+            opp.remove(axis)
+          opp = opp[:5]
           pts = 10
           combos = [(axis, c[0], c[1]) for c in combinations(sorted(opp), 2)]
+          bet_type_flag = "sanrenpuku"
         else: # 3連複 5頭ボックス
           box_horses = selected_nums[:5]
           pts = 10
           combos = list(combinations(sorted(box_horses), 3))
+          bet_type_flag = "sanrenpuku"
 
         bet_amt = max(100, int((budget_val / 100 / pts) * 100))
         total_inv = pts * bet_amt
+
+        # 実際の着順馬番を取得
+        def parse_num(sel):
+          m = re.match(r"^(\d+)番", str(sel))
+          return int(m.group(1)) if m else None
+
+        a1 = parse_num(pro_act_1st)
+        a2 = parse_num(pro_act_2nd)
+        a3 = parse_num(pro_act_3rd)
+
+        is_hit = False
+        hit_combo_str = ""
+
+        if a1 and a2 and a3:
+          actual_top3_set = {a1, a2, a3}
+          
+          if bet_type_flag == "wide":
+            for c in combos:
+              if c[0] in actual_top3_set and c[1] in actual_top3_set:
+                is_hit = True
+                hit_combo_str = f"{c[0]}-{c[1]}"
+                break
+          else:
+            for c in combos:
+              if set(c) == actual_top3_set:
+                is_hit = True
+                hit_combo_str = f"{c[0]}-{c[1]}-{c[2]}"
+                break
+
+        st.markdown("---")
+        st.subheader("📊 プロ予想家 連動判定結果")
+        col_a, col_b, col_c = st.columns(3)
+        col_a.metric("想定投資額", f"{total_inv:,} 円")
+        col_b.metric("買い目点数", f"{pts} 点")
+        
+        if a1 and a2 and a3:
+          if is_hit:
+            col_c.metric("判定結果", "🎉 的中！", delta="Hit")
+            st.success(f"🎉 おめでとうございます！ プロ予想の買い目（{hit_combo_str}）が的中しました！")
+          else:
+            col_c.metric("判定結果", "❌ 外れ", delta="-100%", delta_color="inverse")
+            st.warning("❌ 残念ながら今回のプロ予想の買い目はハズレとなりました。")
+        else:
+          col_c.metric("判定結果", "判定待ち", delta="結果未入力")
+          st.info("実際の1〜3着馬を選択すると、自動で的中判定が行われます。")
 
         ipat_list = []
         for c in combos:
@@ -506,13 +557,6 @@ with tab3:
             ipat_list.append(f"{c[0]}-{c[1]}  ({bet_amt}円)")
           else:
             ipat_list.append(f"{c[0]}-{c[1]}-{c[2]}  ({bet_amt}円)")
-
-        st.markdown("---")
-        st.subheader("📊 プロ予想家シミュレーション結果")
-        col_a, col_b, col_c = st.columns(3)
-        col_a.metric("想定投資額", f"{total_inv:,} 円")
-        col_b.metric("買い目点数", f"{pts} 点")
-        col_c.metric("1点あたり金額", f"{bet_amt} 円")
 
         st.markdown("### 📋 即PAT入力用買い目リスト（プロ予想版）")
         st.code("\n".join(ipat_list), language="text")
