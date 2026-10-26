@@ -9,12 +9,12 @@ st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 予想家
 
 st.title("競馬予想AIシミュレーター ＆ 予想家比較ボード")
 
-# タブを2つに整理（Tab1: シミュレーション / Tab2: 予想比較・合算ハイブリッド ＆ 結果判定）
-tab1, tab2 = st.tabs(["🚀 シミュレーション", "📝 予想比較・合算ハイブリッド ＆ 判定"])
+# タブを2つに整理（Tab1: AIシミュレーション ＆ スプレッドシート / Tab2: 予想比較・合算ハイブリッド ＆ 結果判定）
+tab1, tab2 = st.tabs(["🚀 AIシミュレーション ＆ スプレッドシート", "📝 予想比較・合算ハイブリッド ＆ 判定"])
 
 with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス")
-  st.write("出馬表CSVを貼り付けてボタンを押すだけで、高速に展開予測と5頭ボックス買い目、即PAT用リストを算出します。")
+  st.write("出馬表CSVを貼り付けてボタンを押すだけで、高速に展開予測と5頭ボックス買い目、スプレッドシート・即PAT用リストを算出します。")
 
   col_s1, col_s2, col_s3 = st.columns(3)
   with col_s1:
@@ -316,8 +316,11 @@ with tab1:
         st.markdown("### 📋 即PAT入力用買い目リスト（ワンクリックコピー）")
         st.code(ipat_text_block, language="text")
 
-        st.markdown("### 📋 スプレッドシート用コピー欄（右上のボタンでワンクリックコピー）")
-        st.code(StringIO(df_export_final.to_csv(sep="\t", index=False)).getvalue(), language="text")
+        # ─── スプレッドシート用一括コピー欄の復活 ───
+        st.markdown("### 📋 スプレッドシート用一括コピー欄（タブ区切りデータ）")
+        st.write("下のテキストエリア内をクリックしてコピーするか、右上のボタンで一括コピーできます。")
+        tsv_string = StringIO(df_export_final.to_csv(sep="\t", index=False)).getvalue()
+        st.text_area("スプレッドシート用データ (一括コピー用)", value=tsv_string, height=200)
 
         st.subheader("🎯 勝負判定 ＆ 5頭ボックス買い目インフォ")
         if roi_val_num >= threshold_roi:
@@ -332,19 +335,16 @@ with tab2:
   st.header("📝 予想比較・合算ハイブリッド ＆ 結果判定ボード")
   st.info("「AI単体」「プロ予想単体」、さらに両者の推奨馬を掛け合わせた「合算ハイブリッド」の比較から、実際のレース結果との的中判定までこの画面ひとつで行えます。")
 
-  # CSVアップロードによる結果判定データ読み込み（Tab2の機能もここに統合）
   uploaded_sim_file = st.file_uploader("📂 （任意）過去に保存したシミュレーション結果CSVをアップロードしてデータを読み込む", type=["csv"], key="integrated_csv_up")
   
   if uploaded_sim_file is not None:
     df_loaded_csv = pd.read_csv(uploaded_sim_file)
-    # セッションステートに強制反映
     st.session_state.df_ranked = df_loaded_csv
     st.success("CSVファイルから馬データを正常に読み込みました！")
 
   if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
     df_r = st.session_state.df_ranked
     
-    # カラム名がCSV由来かAI直接由来かで柔軟に対応
     num_col = "馬番" if "馬番" in df_r.columns else df_r.columns[0]
     name_col = "馬名" if "馬名" in df_r.columns else df_r.columns[1]
     pop_col = "人気" if "人気" in df_r.columns else "人気"
