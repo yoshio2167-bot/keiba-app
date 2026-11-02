@@ -424,10 +424,9 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# Tab 3: プロ予想・ハイブリッド比較
 with tab3:
-  st.header("📝 プロ予想 ＆ 合算ハイブリッド比較ボード")
-  st.info("Tab1でシミュレーションを実行すると馬データが連動します。選択式でプロ予想を選び、AI単体・プロ単体・合算ハイブリッドの比較や的中判定が行えます。")
+  st.header("プロ予想 ＆ 合算ハイブリッド比較ボード")
+  st.write("Tab1でシミュレーションを実行すると馬データが連動します。選択式でプロ予想を選び、AI単体・プロ単体・合算ハイブリッドの比較や的中判定が行えます。")
 
   if "df_ranked" in st.session_state and not st.session_state.df_ranked.empty:
     df_r = st.session_state.df_ranked
