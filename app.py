@@ -15,13 +15,15 @@ with tab1:
   st.header("モンテカルロ・シミュレーション ＆ 5頭ボックス")
   st.write("出馬表CSVを貼り付けてボタンを押すだけで、高速に展開予測と5頭ボックス買い目、即PAT用リストを算出します。")
 
-  col_s1, col_s2, col_s3 = st.columns(3)
+  col_s1, col_s2, col_s3, col_s4 = st.columns(4)
   with col_s1:
     threshold_roi = st.slider("🎯 勝負見送りライン（期待回収率 % 未満をパス）", min_value=100, max_value=200, value=120, step=10)
   with col_s2:
     sim_count_input = st.selectbox("🔄 シミュレーション回数", options=["1回（一発ガチ予想）", "100回", "300回", "500回"], index=1)
   with col_s3:
-    total_budget = st.number_input("💰 投資予算 (円)", min_value=500, max_value=50000, value=2000, step=500)
+    total_budget = st.number_input("💰 投資予算 (円)", min_value=500, max_value=50000, value=1000, step=500)
+  with col_s4:
+    pace_option = st.selectbox("⚡ 展開ペース選択", options=["自動判定", "スローペース（前残・先行有利）", "平均ペース（バランス型）", "ハイ・タフペース（差し・追込有利）"], index=0)
 
   if "1回" in sim_count_input:
     sim_count = 1
@@ -121,12 +123,17 @@ with tab1:
             nige_senko_count += 1
 
         total_horses = len(df_res)
-        if nige_senko_count <= max(1, total_horses * 0.2):
-          auto_pace_name = "スローペース（前残・先行有利）"
-        elif nige_senko_count >= total_horses * 0.5:
-          auto_pace_name = "ハイ・タフペース（差し・追込有利）"
+        
+        # ペース選択ロジック（手動選択または自動判定）
+        if pace_option == "自動判定":
+          if nige_senko_count <= max(1, total_horses * 0.2):
+            auto_pace_name = "スローペース（前残・先行有利）"
+          elif nige_senko_count >= total_horses * 0.5:
+            auto_pace_name = "ハイ・タフペース（差し・追込有利）"
+          else:
+            auto_pace_name = "平均ペース（バランス型）"
         else:
-          auto_pace_name = "平均ペース（バランス型）"
+          auto_pace_name = pace_option
 
         def calc_high_precision_score(row):
           try:
@@ -216,7 +223,7 @@ with tab1:
         st.session_state.df_ranked = df_ranked
         st.session_state.total_budget = total_budget
 
-        st.info(f"🤖 **【AI自動判定された展開】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
+        st.info(f"🤖 **【選択された展開ペース】: {auto_pace_name}** （逃げ先行馬: {nige_senko_count}頭 / 登録数: {total_horses}頭）")
         st.subheader("📊 高精度予想・ランキング結果（上位5頭）")
         
         display_cols = [
@@ -424,7 +431,6 @@ with tab2:
   else:
     st.info("まずはTab1で保存したCSVファイルをアップロードしてください。")
 
-# --- Tab 3: プロ予想家入力 ＆ 結果紐づけ判定（ラジオボタン選択式に改善） ---
 with tab3:
   st.header("📝 プロ予想家・SNS予想 入力 ＆ 結果紐づけ判定")
   st.info("Tab1でシミュレーションを実行すると馬データが連動します。タップ選択式で上位6頭を選び、実際の1〜3着馬と照合して的中判定が行えます。")
@@ -484,7 +490,7 @@ with tab3:
           if digits:
             selected_nums.append(int(digits))
 
-        budget_val = st.session_state.get("total_budget", 2000)
+        budget_val = st.session_state.get("total_budget", 1000)
         
         if "3連複 6頭ボックス" in pro_strategy:
           box_horses = selected_nums[:6]
