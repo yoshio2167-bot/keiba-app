@@ -19,8 +19,6 @@ with col_s2:
 sim_count = st.selectbox("🔄 シミュレーション回数", options=[1, 100, 300, 500], index=1)
 with col_s3:
 total_budget = st.number_input("💰 投資予算 (円)", 500, 50000, 2000, 500)
-col_btn1, col_btn2 = st.columns([0.8, 0.2])
-with col_btn2:
 if st.button("🗑️ 一括削除", type="secondary"):
 st.session_state.pasted_csv = ""
 st.rerun()
