@@ -7,7 +7,6 @@ from itertools import combinations
 st.set_page_config(page_title="競馬予想AIシミュレーター ＆ 予想家比較ボード", layout="wide", initial_sidebar_state="collapsed")
 st.title("競馬予想AIシミュレーター ＆ 予想家比較ボード")
 tab1, tab2, tab3 = st.tabs(["🚀 シミュレーション", "📊 結果照合・判定", "📝 プロ予想・ハイブリッド比較"])
-セッション状態の初期化
 if "pasted_csv" not in st.session_state:
 st.session_state.pasted_csv = ""
 with tab1:
